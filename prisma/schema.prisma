@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Supplier {
+  id        Int       @id @default(autoincrement())
+  name      String
+  category  String
+  status    String    @default("Active")
+  leadTime  String
+  
+  products  Product[]
+  purchases Purchase[]
+}
+
+model Product {
+  id           Int       @id @default(autoincrement())
+  sku          String    @unique
+  name         String
+  category     String
+  type         String
+  costPrice    Float
+  sellingPrice Float
+  laborCostPerUnit   Float @default(0.0)
+  overheadCostPerUnit Float @default(0.0)
+  stock        Int       @default(0)
+  status       String    @default("Active")
+
+  supplierId   Int?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+
+  stockMovements StockMovement[]
+  purchases      PurchaseItem[]
+  inventoryBatches InventoryBatch[]
+
+  // BOM Relationships
+  bomAsFinishedGood BillOfMaterial[] @relation("BOM_FinishedGood")
+  bomAsComponent    BillOfMaterial[] @relation("BOM_Component")
+  
+  saleItems         SaleItem[]
+}
+
+model Purchase {
+  id          Int      @id @default(autoincrement())
+  supplierId  Int
+  date        DateTime @default(now())
+  status      String   @default("Received")
+  totalValue  Float
+  
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  items       PurchaseItem[]
+}
+
+model PurchaseItem {
+  id           Int      @id @default(autoincrement())
+  purchaseId   Int
+  productId    Int
+  quantity     Int
+  unitCost     Float
+
+  purchase     Purchase @relation(fields: [purchaseId], references: [id])
+  product      Product  @relation(fields: [productId], references: [id])
+}
+
+model InventoryBatch {
+  id           Int      @id @default(autoincrement())
+  productId    Int
+  batchNumber  String
+  quantity     Int
+  unitCost     Float
+  mfgDate      DateTime?
+  expiryDate   DateTime?
+
+  product      Product  @relation(fields: [productId], references: [id])
+}
+
+model StockMovement {
+  id           Int      @id @default(autoincrement())
+  productId    Int
+  quantity     Int      // Positive for receive, negative for deduction
+  movementType String   // "PO_RECEIVE", "SALE", "ADJUSTMENT"
+  unitCost     Float
+  date         DateTime @default(now())
+
+  product      Product  @relation(fields: [productId], references: [id])
+}
+
+model BillOfMaterial {
+  id               Int      @id @default(autoincrement())
+  finishedGoodId   Int
+  componentId      Int
+  quantityRequired Float
+  
+  finishedGood     Product  @relation("BOM_FinishedGood", fields: [finishedGoodId], references: [id])
+  component        Product  @relation("BOM_Component", fields: [componentId], references: [id])
+
+  @@unique([finishedGoodId, componentId])
+}
+
+model Sale {
+  id           Int        @id @default(autoincrement())
+  customerName String?
+  channel      String     @default("Store")
+  date         DateTime   @default(now())
+  totalRevenue Float
+  totalCogs    Float
+
+  items        SaleItem[]
+}
+
+model SaleItem {
+  id               Int      @id @default(autoincrement())
+  saleId           Int
+  productId        Int
+  quantity         Int
+  unitSellingPrice Float
+  unitCogs         Float    // Locked COGS at time of sale
+
+  sale             Sale     @relation(fields: [saleId], references: [id])
+  product          Product  @relation(fields: [productId], references: [id])
+}
