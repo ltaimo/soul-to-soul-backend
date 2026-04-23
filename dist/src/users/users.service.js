@@ -54,7 +54,7 @@ let UsersService = class UsersService {
     async seedDefaultAdmin() {
         const userCount = await this.prisma.user.count();
         if (userCount === 0) {
-            const passwordHash = await bcrypt.hash('SoulAdmin#2026!', 10);
+            const passwordHash = await bcrypt.hash('Admin@123', 10);
             await this.prisma.user.create({
                 data: {
                     fullName: 'System Administrator',

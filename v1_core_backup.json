@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-04-23T06:49:58.557Z",
+  "products": [],
+  "settings": {
+    "id": 1,
+    "companyName": "Soul to Soul ERP",
+    "companyLogo": null,
+    "defaultCurrency": "MZN",
+    "currencySymbol": "MT",
+    "decimalFormatting": 2,
+    "updatedAt": "2026-04-23T06:38:47.221Z"
+  },
+  "users": [
+    {
+      "fullName": "System Administrator",
+      "email": "admin@soultosoul.local",
+      "role": "admin",
+      "status": "active",
+      "createdAt": "2026-04-23T06:38:09.783Z"
+    }
+  ]
+}
