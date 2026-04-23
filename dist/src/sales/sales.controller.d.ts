@@ -42,6 +42,11 @@ export declare class SalesController {
                 sellingPrice: number;
                 overheadCostPerUnit: number;
                 stock: number;
+                brand: string | null;
+                description: string | null;
+                barcode: string | null;
+                unit: string;
+                minStock: number;
             };
         } & {
             id: number;

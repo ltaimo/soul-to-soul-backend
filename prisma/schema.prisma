@@ -30,6 +30,13 @@ model Product {
   overheadCostPerUnit Float @default(0.0)
   stock        Int       @default(0)
   status       String    @default("Active")
+  
+  // New Product Management Fields
+  brand        String?
+  description  String?
+  barcode      String?
+  unit         String    @default("pcs")
+  minStock     Int       @default(0)
 
   supplierId   Int?
   supplier     Supplier? @relation(fields: [supplierId], references: [id])
@@ -83,9 +90,10 @@ model StockMovement {
   id           Int      @id @default(autoincrement())
   productId    Int
   quantity     Int      // Positive for receive, negative for deduction
-  movementType String   // "PO_RECEIVE", "SALE", "ADJUSTMENT"
+  movementType String   // "PO_RECEIVE", "SALE", "ADJUSTMENT", "INITIAL_ADJUSTMENT"
   unitCost     Float
   date         DateTime @default(now())
+  reference    String?  // Audit/Note reference
 
   product      Product  @relation(fields: [productId], references: [id])
 }
@@ -123,4 +131,27 @@ model SaleItem {
 
   sale             Sale     @relation(fields: [saleId], references: [id])
   product          Product  @relation(fields: [productId], references: [id])
+}
+
+model SystemSetting {
+  id                Int      @id @default(1)
+  companyName       String   @default("Soul to Soul ERP")
+  companyLogo       String?
+  defaultCurrency   String   @default("MZN")
+  currencySymbol    String   @default("MT")
+  decimalFormatting Int      @default(2)
+  updatedAt         DateTime @updatedAt
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  fullName     String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("staff")   // admin, manager, staff, viewer
+  status       String   @default("active")  // active, inactive
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    Int?
+  updatedBy    Int?
 }

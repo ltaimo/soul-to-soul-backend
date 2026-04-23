@@ -21,6 +21,11 @@ export declare class ProductionService {
             sellingPrice: number;
             overheadCostPerUnit: number;
             stock: number;
+            brand: string | null;
+            description: string | null;
+            barcode: string | null;
+            unit: string;
+            minStock: number;
         };
     }>;
     getProductBOM(productId: number): Promise<({
@@ -37,6 +42,11 @@ export declare class ProductionService {
             sellingPrice: number;
             overheadCostPerUnit: number;
             stock: number;
+            brand: string | null;
+            description: string | null;
+            barcode: string | null;
+            unit: string;
+            minStock: number;
         };
     } & {
         id: number;

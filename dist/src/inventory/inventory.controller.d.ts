@@ -18,6 +18,11 @@ export declare class InventoryController {
             sellingPrice: number;
             overheadCostPerUnit: number;
             stock: number;
+            brand: string | null;
+            description: string | null;
+            barcode: string | null;
+            unit: string;
+            minStock: number;
         };
         batchNumber: string;
     }>;
@@ -34,6 +39,11 @@ export declare class InventoryController {
         sellingPrice: number;
         overheadCostPerUnit: number;
         stock: number;
+        brand: string | null;
+        description: string | null;
+        barcode: string | null;
+        unit: string;
+        minStock: number;
     }[]>;
     getSuppliers(): Promise<{
         id: number;

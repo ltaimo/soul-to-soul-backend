@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsController = void 0;
 const common_1 = require("@nestjs/common");
+const cache_manager_1 = require("@nestjs/cache-manager");
 const analytics_service_1 = require("./analytics.service");
 let AnalyticsController = class AnalyticsController {
     analyticsService;
@@ -39,6 +40,7 @@ __decorate([
 ], AnalyticsController.prototype, "getAlerts", null);
 exports.AnalyticsController = AnalyticsController = __decorate([
     (0, common_1.Controller)('api/analytics'),
+    (0, common_1.UseInterceptors)(cache_manager_1.CacheInterceptor),
     __metadata("design:paramtypes", [analytics_service_1.AnalyticsService])
 ], AnalyticsController);
 //# sourceMappingURL=analytics.controller.js.map
