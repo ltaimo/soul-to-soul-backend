@@ -6,68 +6,68 @@ export declare class UsersService {
     createUser(data: any): Promise<{
         success: boolean;
         user: {
+            id: number;
+            status: string;
+            updatedAt: Date;
             fullName: string;
             email: string;
             role: string;
-            status: string;
             createdAt: Date;
-            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
-            id: number;
         };
     }>;
     updateUser(id: number, data: any): Promise<{
         success: boolean;
         user: {
+            id: number;
+            status: string;
+            updatedAt: Date;
             fullName: string;
             email: string;
             role: string;
-            status: string;
             createdAt: Date;
-            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
-            id: number;
         };
     }>;
     changeStatus(id: number, status: string, updatedBy?: number): Promise<{
         success: boolean;
         user: {
+            id: number;
+            status: string;
+            updatedAt: Date;
             fullName: string;
             email: string;
             role: string;
-            status: string;
             createdAt: Date;
-            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
-            id: number;
         };
     }>;
     changeRole(id: number, role: string, updatedBy?: number): Promise<{
         success: boolean;
         user: {
+            id: number;
+            status: string;
+            updatedAt: Date;
             fullName: string;
             email: string;
             role: string;
-            status: string;
             createdAt: Date;
-            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
-            id: number;
         };
     }>;
     getAllUsers(): Promise<{
+        id: number;
+        status: string;
+        updatedAt: Date;
         fullName: string;
         email: string;
         role: string;
-        status: string;
         createdAt: Date;
-        updatedAt: Date;
         createdBy: number | null;
         updatedBy: number | null;
-        id: number;
     }[]>;
 }
