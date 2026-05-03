@@ -8,9 +8,18 @@ export class SalesController {
   @Post('confirm')
   async confirmSale(
     @Body('customerName') customerName: string,
+    @Body('customerEmail') customerEmail: string,
+    @Body('paymentMethod') paymentMethod: string,
+    @Body('amountPaid') amountPaid: number,
     @Body('items') items: { productId: number; quantity: number }[]
   ) {
-    return this.salesService.processSale(customerName, items);
+    return this.salesService.processSale({
+      customerName,
+      customerEmail,
+      paymentMethod,
+      amountPaid,
+      items,
+    });
   }
 
   @Get()

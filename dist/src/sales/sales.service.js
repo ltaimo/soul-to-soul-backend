@@ -17,7 +17,8 @@ let SalesService = class SalesService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async processSale(customerName, items) {
+    async processSale(data) {
+        const items = data.items;
         if (!items || items.length === 0) {
             throw new common_1.BadRequestException('A sale must contain at least one item.');
         }
@@ -61,16 +62,26 @@ let SalesService = class SalesService {
                     }
                 });
             }
+            const paymentMethod = data.paymentMethod || 'Cash';
+            const amountPaid = Number(data.amountPaid ?? totalRevenue);
+            if (amountPaid < totalRevenue) {
+                throw new common_1.BadRequestException('Amount paid cannot be lower than the sale total.');
+            }
+            const changeGiven = amountPaid - totalRevenue;
             const sale = await tx.sale.create({
                 data: {
-                    customerName: customerName || 'Retail Customer',
+                    customerName: data.customerName || 'Retail Customer',
+                    customerEmail: data.customerEmail || null,
+                    paymentMethod,
+                    amountPaid,
+                    changeGiven,
                     totalRevenue,
                     totalCogs,
                     items: {
                         create: saleItemsToCreate
                     }
                 },
-                include: { items: true }
+                include: { items: { include: { product: true } } }
             });
             return {
                 success: true,

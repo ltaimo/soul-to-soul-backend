@@ -77,6 +77,38 @@ let InventoryService = class InventoryService {
             };
         });
     }
+    async adjustStock(productId, quantity, reference) {
+        if (!quantity || quantity === 0)
+            throw new common_1.BadRequestException('Adjustment quantity cannot be zero');
+        return this.prisma.$transaction(async (tx) => {
+            const product = await tx.product.findUnique({
+                where: { id: productId },
+            });
+            if (!product)
+                throw new common_1.BadRequestException('Product not found');
+            const newStock = product.stock + quantity;
+            if (newStock < 0) {
+                throw new common_1.BadRequestException(`Adjustment would make stock negative. Current stock: ${product.stock}`);
+            }
+            await tx.stockMovement.create({
+                data: {
+                    productId,
+                    quantity,
+                    movementType: 'ADJUSTMENT',
+                    unitCost: product.costPrice,
+                    reference: reference || 'Manual stock adjustment',
+                }
+            });
+            const updatedProduct = await tx.product.update({
+                where: { id: productId },
+                data: { stock: newStock }
+            });
+            return {
+                success: true,
+                product: updatedProduct,
+            };
+        });
+    }
     async getAllProducts() {
         return this.prisma.product.findMany();
     }

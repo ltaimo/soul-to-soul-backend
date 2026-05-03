@@ -20,8 +20,14 @@ let SalesController = class SalesController {
     constructor(salesService) {
         this.salesService = salesService;
     }
-    async confirmSale(customerName, items) {
-        return this.salesService.processSale(customerName, items);
+    async confirmSale(customerName, customerEmail, paymentMethod, amountPaid, items) {
+        return this.salesService.processSale({
+            customerName,
+            customerEmail,
+            paymentMethod,
+            amountPaid,
+            items,
+        });
     }
     async getSales() {
         return this.salesService.getRecentSales();
@@ -31,9 +37,12 @@ exports.SalesController = SalesController;
 __decorate([
     (0, common_1.Post)('confirm'),
     __param(0, (0, common_1.Body)('customerName')),
-    __param(1, (0, common_1.Body)('items')),
+    __param(1, (0, common_1.Body)('customerEmail')),
+    __param(2, (0, common_1.Body)('paymentMethod')),
+    __param(3, (0, common_1.Body)('amountPaid')),
+    __param(4, (0, common_1.Body)('items')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Array]),
+    __metadata("design:paramtypes", [String, String, String, Number, Array]),
     __metadata("design:returntype", Promise)
 ], SalesController.prototype, "confirmSale", null);
 __decorate([

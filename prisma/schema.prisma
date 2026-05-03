@@ -113,7 +113,11 @@ model BillOfMaterial {
 model Sale {
   id           Int        @id @default(autoincrement())
   customerName String?
+  customerEmail String?
   channel      String     @default("Store")
+  paymentMethod String    @default("Cash")
+  amountPaid   Float      @default(0)
+  changeGiven  Float      @default(0)
   date         DateTime   @default(now())
   totalRevenue Float
   totalCogs    Float

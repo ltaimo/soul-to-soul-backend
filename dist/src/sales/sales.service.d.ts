@@ -2,27 +2,57 @@ import { PrismaService } from '../prisma.service';
 export declare class SalesService {
     private prisma;
     constructor(prisma: PrismaService);
-    processSale(customerName: string, items: {
-        productId: number;
-        quantity: number;
-    }[]): Promise<{
+    processSale(data: {
+        customerName?: string;
+        customerEmail?: string;
+        paymentMethod?: string;
+        amountPaid?: number;
+        items: {
+            productId: number;
+            quantity: number;
+        }[];
+    }): Promise<{
         success: boolean;
         saleId: number;
         marginGiven: string | number;
         sale: {
-            items: {
+            items: ({
+                product: {
+                    id: number;
+                    name: string;
+                    category: string;
+                    status: string;
+                    supplierId: number | null;
+                    laborCostPerUnit: number;
+                    sku: string;
+                    type: string;
+                    costPrice: number;
+                    sellingPrice: number;
+                    overheadCostPerUnit: number;
+                    stock: number;
+                    brand: string | null;
+                    description: string | null;
+                    barcode: string | null;
+                    unit: string;
+                    minStock: number;
+                };
+            } & {
                 id: number;
                 quantity: number;
                 productId: number;
                 saleId: number;
                 unitSellingPrice: number;
                 unitCogs: number;
-            }[];
+            })[];
         } & {
             id: number;
             date: Date;
             customerName: string | null;
+            customerEmail: string | null;
             channel: string;
+            paymentMethod: string;
+            amountPaid: number;
+            changeGiven: number;
             totalRevenue: number;
             totalCogs: number;
         };
@@ -60,7 +90,11 @@ export declare class SalesService {
         id: number;
         date: Date;
         customerName: string | null;
+        customerEmail: string | null;
         channel: string;
+        paymentMethod: string;
+        amountPaid: number;
+        changeGiven: number;
         totalRevenue: number;
         totalCogs: number;
     })[]>;

@@ -15,6 +15,15 @@ export class InventoryController {
     return this.inventoryService.receiveGoods(productId, quantity, landedCost, supplierId);
   }
 
+  @Post('adjust')
+  async adjustStock(
+    @Body('productId') productId: number,
+    @Body('quantity') quantity: number,
+    @Body('reference') reference?: string,
+  ) {
+    return this.inventoryService.adjustStock(productId, quantity, reference);
+  }
+
   @Get('products')
   async getProducts() {
     return this.inventoryService.getAllProducts();

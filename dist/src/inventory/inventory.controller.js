@@ -23,6 +23,9 @@ let InventoryController = class InventoryController {
     async receiveGoods(productId, quantity, landedCost, supplierId) {
         return this.inventoryService.receiveGoods(productId, quantity, landedCost, supplierId);
     }
+    async adjustStock(productId, quantity, reference) {
+        return this.inventoryService.adjustStock(productId, quantity, reference);
+    }
     async getProducts() {
         return this.inventoryService.getAllProducts();
     }
@@ -41,6 +44,15 @@ __decorate([
     __metadata("design:paramtypes", [Number, Number, Number, Number]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "receiveGoods", null);
+__decorate([
+    (0, common_1.Post)('adjust'),
+    __param(0, (0, common_1.Body)('productId')),
+    __param(1, (0, common_1.Body)('quantity')),
+    __param(2, (0, common_1.Body)('reference')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Number, Number, String]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "adjustStock", null);
 __decorate([
     (0, common_1.Get)('products'),
     __metadata("design:type", Function),

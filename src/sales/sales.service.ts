@@ -5,7 +5,14 @@ import { PrismaService } from '../prisma.service';
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
-  async processSale(customerName: string, items: { productId: number; quantity: number }[]) {
+  async processSale(data: {
+    customerName?: string;
+    customerEmail?: string;
+    paymentMethod?: string;
+    amountPaid?: number;
+    items: { productId: number; quantity: number }[];
+  }) {
+    const items = data.items;
     if (!items || items.length === 0) {
       throw new BadRequestException('A sale must contain at least one item.');
     }
@@ -66,17 +73,28 @@ export class SalesService {
         });
       }
 
+      const paymentMethod = data.paymentMethod || 'Cash';
+      const amountPaid = Number(data.amountPaid ?? totalRevenue);
+      if (amountPaid < totalRevenue) {
+        throw new BadRequestException('Amount paid cannot be lower than the sale total.');
+      }
+      const changeGiven = amountPaid - totalRevenue;
+
       // 3. Create Sale Header and Items
       const sale = await tx.sale.create({
         data: {
-          customerName: customerName || 'Retail Customer',
+          customerName: data.customerName || 'Retail Customer',
+          customerEmail: data.customerEmail || null,
+          paymentMethod,
+          amountPaid,
+          changeGiven,
           totalRevenue,
           totalCogs,
           items: {
             create: saleItemsToCreate
           }
         },
-        include: { items: true }
+        include: { items: { include: { product: true } } }
       });
 
       return {
