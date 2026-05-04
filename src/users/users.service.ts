@@ -6,6 +6,14 @@ import * as bcrypt from 'bcryptjs';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
+  private readonly allowedRoles = ['admin', 'manager', 'cashier', 'salesperson', 'stock_manager', 'production_manager', 'viewer', 'staff'];
+
+  private validateRole(role?: string) {
+    if (role && !this.allowedRoles.includes(role)) {
+      throw new BadRequestException('Invalid user role.');
+    }
+  }
+
   async seedDefaultAdmin() {
     const userCount = await this.prisma.user.count();
     if (userCount === 0) {
@@ -24,6 +32,8 @@ export class UsersService {
   }
 
   async createUser(data: any) {
+    this.validateRole(data.role);
+
     if (!data.password || data.password.length < 6) {
       throw new BadRequestException('Password must be at least 6 characters.');
     }
@@ -91,6 +101,8 @@ export class UsersService {
   }
 
   async changeRole(id: number, role: string, updatedBy?: number) {
+    this.validateRole(role);
+
     const userTarget = await this.prisma.user.findUnique({ where: { id } });
     if (userTarget?.role === 'admin' && role !== 'admin') {
       const activeAdmins = await this.prisma.user.count({ where: { role: 'admin', status: 'active' } });

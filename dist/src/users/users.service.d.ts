@@ -2,17 +2,19 @@ import { PrismaService } from '../prisma.service';
 export declare class UsersService {
     private prisma;
     constructor(prisma: PrismaService);
+    private readonly allowedRoles;
+    private validateRole;
     seedDefaultAdmin(): Promise<void>;
     createUser(data: any): Promise<{
         success: boolean;
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -22,11 +24,11 @@ export declare class UsersService {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -36,11 +38,11 @@ export declare class UsersService {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -50,11 +52,11 @@ export declare class UsersService {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -62,11 +64,11 @@ export declare class UsersService {
     getAllUsers(): Promise<{
         id: number;
         status: string;
-        updatedAt: Date;
-        fullName: string;
         email: string;
+        fullName: string;
         role: string;
         createdAt: Date;
+        updatedAt: Date;
         createdBy: number | null;
         updatedBy: number | null;
     }[]>;

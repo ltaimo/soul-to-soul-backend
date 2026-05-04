@@ -10,6 +10,8 @@ export class SalesService {
     customerEmail?: string;
     paymentMethod?: string;
     amountPaid?: number;
+    sellerId?: number;
+    sellerName?: string;
     items: { productId: number; quantity: number }[];
   }) {
     const items = data.items;
@@ -79,12 +81,17 @@ export class SalesService {
         throw new BadRequestException('Amount paid cannot be lower than the sale total.');
       }
       const changeGiven = amountPaid - totalRevenue;
+      const seller = data.sellerId
+        ? await tx.user.findUnique({ where: { id: data.sellerId }, select: { fullName: true, email: true } })
+        : null;
 
       // 3. Create Sale Header and Items
       const sale = await tx.sale.create({
         data: {
           customerName: data.customerName || 'Retail Customer',
           customerEmail: data.customerEmail || null,
+          sellerId: data.sellerId || null,
+          sellerName: seller?.fullName || data.sellerName || seller?.email || null,
           paymentMethod,
           amountPaid,
           changeGiven,

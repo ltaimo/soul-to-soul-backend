@@ -68,10 +68,15 @@ let SalesService = class SalesService {
                 throw new common_1.BadRequestException('Amount paid cannot be lower than the sale total.');
             }
             const changeGiven = amountPaid - totalRevenue;
+            const seller = data.sellerId
+                ? await tx.user.findUnique({ where: { id: data.sellerId }, select: { fullName: true, email: true } })
+                : null;
             const sale = await tx.sale.create({
                 data: {
                     customerName: data.customerName || 'Retail Customer',
                     customerEmail: data.customerEmail || null,
+                    sellerId: data.sellerId || null,
+                    sellerName: seller?.fullName || data.sellerName || seller?.email || null,
                     paymentMethod,
                     amountPaid,
                     changeGiven,

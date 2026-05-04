@@ -15,17 +15,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SalesController = void 0;
 const common_1 = require("@nestjs/common");
 const sales_service_1 = require("./sales.service");
+const roles_decorator_1 = require("../auth/roles.decorator");
 let SalesController = class SalesController {
     salesService;
     constructor(salesService) {
         this.salesService = salesService;
     }
-    async confirmSale(customerName, customerEmail, paymentMethod, amountPaid, items) {
+    async confirmSale(req, customerName, customerEmail, paymentMethod, amountPaid, items) {
         return this.salesService.processSale({
             customerName,
             customerEmail,
             paymentMethod,
             amountPaid,
+            sellerId: req.user?.id,
+            sellerName: req.user?.fullName || req.user?.email,
             items,
         });
     }
@@ -36,17 +39,20 @@ let SalesController = class SalesController {
 exports.SalesController = SalesController;
 __decorate([
     (0, common_1.Post)('confirm'),
-    __param(0, (0, common_1.Body)('customerName')),
-    __param(1, (0, common_1.Body)('customerEmail')),
-    __param(2, (0, common_1.Body)('paymentMethod')),
-    __param(3, (0, common_1.Body)('amountPaid')),
-    __param(4, (0, common_1.Body)('items')),
+    (0, roles_decorator_1.Roles)('manager', 'cashier', 'salesperson', 'staff'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)('customerName')),
+    __param(2, (0, common_1.Body)('customerEmail')),
+    __param(3, (0, common_1.Body)('paymentMethod')),
+    __param(4, (0, common_1.Body)('amountPaid')),
+    __param(5, (0, common_1.Body)('items')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, Number, Array]),
+    __metadata("design:paramtypes", [Object, String, String, String, Number, Array]),
     __metadata("design:returntype", Promise)
 ], SalesController.prototype, "confirmSale", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, roles_decorator_1.Roles)('manager', 'cashier', 'salesperson', 'staff'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

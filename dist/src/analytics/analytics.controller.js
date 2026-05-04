@@ -13,6 +13,7 @@ exports.AnalyticsController = void 0;
 const common_1 = require("@nestjs/common");
 const cache_manager_1 = require("@nestjs/cache-manager");
 const analytics_service_1 = require("./analytics.service");
+const roles_decorator_1 = require("../auth/roles.decorator");
 let AnalyticsController = class AnalyticsController {
     analyticsService;
     constructor(analyticsService) {
@@ -28,12 +29,14 @@ let AnalyticsController = class AnalyticsController {
 exports.AnalyticsController = AnalyticsController;
 __decorate([
     (0, common_1.Get)('kpis'),
+    (0, roles_decorator_1.Roles)('manager', 'stock_manager', 'production_manager', 'viewer'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AnalyticsController.prototype, "getKPIs", null);
 __decorate([
     (0, common_1.Get)('alerts'),
+    (0, roles_decorator_1.Roles)('manager', 'stock_manager', 'production_manager', 'viewer'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

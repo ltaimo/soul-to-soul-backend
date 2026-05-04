@@ -27,6 +27,9 @@ let RolesGuard = class RolesGuard {
             return true;
         }
         const { user } = context.switchToHttp().getRequest();
+        if (user?.role === 'admin') {
+            return true;
+        }
         if (!user || (!requiredRoles.includes(user.role) && requiredRoles.length > 0)) {
             throw new common_1.ForbiddenException('Insufficient permissions to access this resource.');
         }

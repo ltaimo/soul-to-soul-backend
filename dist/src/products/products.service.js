@@ -39,6 +39,7 @@ let ProductsService = class ProductsService {
                     costPrice: Number(data.costPrice) || 0,
                     sellingPrice: Number(data.sellingPrice) || 0,
                     minStock: Number(data.minStock) || 0,
+                    supplierId: data.supplierId ? Number(data.supplierId) : null,
                     status: data.status || 'Active',
                     stock: Number(data.initialStock) || 0
                 }
@@ -82,6 +83,7 @@ let ProductsService = class ProductsService {
                 costPrice: Number(data.costPrice),
                 sellingPrice: Number(data.sellingPrice),
                 minStock: Number(data.minStock),
+                supplierId: data.supplierId ? Number(data.supplierId) : null,
                 status: data.status
             }
         });

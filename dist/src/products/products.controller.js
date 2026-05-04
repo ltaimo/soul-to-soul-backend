@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductsController = void 0;
 const common_1 = require("@nestjs/common");
 const products_service_1 = require("./products.service");
+const roles_decorator_1 = require("../auth/roles.decorator");
 let ProductsController = class ProductsController {
     productsService;
     constructor(productsService) {
@@ -42,6 +43,7 @@ __decorate([
 ], ProductsController.prototype, "getAllProducts", null);
 __decorate([
     (0, common_1.Post)(),
+    (0, roles_decorator_1.Roles)('manager', 'stock_manager'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -49,6 +51,7 @@ __decorate([
 ], ProductsController.prototype, "createProduct", null);
 __decorate([
     (0, common_1.Put)(':id'),
+    (0, roles_decorator_1.Roles)('manager', 'stock_manager'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -57,6 +60,7 @@ __decorate([
 ], ProductsController.prototype, "updateProduct", null);
 __decorate([
     (0, common_1.Patch)(':id/deactivate'),
+    (0, roles_decorator_1.Roles)('manager', 'stock_manager'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),

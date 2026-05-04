@@ -8,6 +8,7 @@ export class InventoryService {
 
   async receiveGoods(productId: number, quantity: number, landedCost: number, supplierId?: number) {
     if (quantity <= 0) throw new BadRequestException('Quantity must be positive');
+    if (!Number.isInteger(quantity)) throw new BadRequestException('Quantity must be a whole number');
     
     // Begin atomic transaction
     return this.prisma.$transaction(async (tx) => {
@@ -120,6 +121,64 @@ export class InventoryService {
   }
 
   async getAllSuppliers() {
-    return this.prisma.supplier.findMany();
+    return this.prisma.supplier.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: {
+            products: true,
+            purchases: true,
+          }
+        }
+      }
+    });
+  }
+
+  async createSupplier(data: any) {
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestException('Supplier name is required');
+    }
+
+    const supplier = await this.prisma.supplier.create({
+      data: {
+        name: data.name.trim(),
+        category: data.category?.trim() || 'General',
+        leadTime: data.leadTime?.trim() || 'Not set',
+        status: data.status || 'Active',
+      }
+    });
+
+    return { success: true, supplier };
+  }
+
+  async updateSupplier(id: number, data: any) {
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestException('Supplier name is required');
+    }
+
+    const supplier = await this.prisma.supplier.update({
+      where: { id },
+      data: {
+        name: data.name.trim(),
+        category: data.category?.trim() || 'General',
+        leadTime: data.leadTime?.trim() || 'Not set',
+        status: data.status || 'Active',
+      }
+    });
+
+    return { success: true, supplier };
+  }
+
+  async updateSupplierStatus(id: number, status: string) {
+    if (!['Active', 'Inactive'].includes(status)) {
+      throw new BadRequestException('Invalid supplier status');
+    }
+
+    const supplier = await this.prisma.supplier.update({
+      where: { id },
+      data: { status }
+    });
+
+    return { success: true, supplier };
   }
 }

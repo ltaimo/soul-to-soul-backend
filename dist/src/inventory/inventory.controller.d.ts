@@ -67,11 +67,46 @@ export declare class InventoryController {
         unit: string;
         minStock: number;
     }[]>;
-    getSuppliers(): Promise<{
+    getSuppliers(): Promise<({
+        _count: {
+            products: number;
+            purchases: number;
+        };
+    } & {
         id: number;
         name: string;
         category: string;
         status: string;
         leadTime: string;
-    }[]>;
+    })[]>;
+    createSupplier(data: any): Promise<{
+        success: boolean;
+        supplier: {
+            id: number;
+            name: string;
+            category: string;
+            status: string;
+            leadTime: string;
+        };
+    }>;
+    updateSupplier(id: string, data: any): Promise<{
+        success: boolean;
+        supplier: {
+            id: number;
+            name: string;
+            category: string;
+            status: string;
+            leadTime: string;
+        };
+    }>;
+    updateSupplierStatus(id: string, status: string): Promise<{
+        success: boolean;
+        supplier: {
+            id: number;
+            name: string;
+            category: string;
+            status: string;
+            leadTime: string;
+        };
+    }>;
 }

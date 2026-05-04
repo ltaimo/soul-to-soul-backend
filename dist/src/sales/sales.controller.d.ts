@@ -2,7 +2,7 @@ import { SalesService } from './sales.service';
 export declare class SalesController {
     private readonly salesService;
     constructor(salesService: SalesService);
-    confirmSale(customerName: string, customerEmail: string, paymentMethod: string, amountPaid: number, items: {
+    confirmSale(req: any, customerName: string, customerEmail: string, paymentMethod: string, amountPaid: number, items: {
         productId: number;
         quantity: number;
     }[]): Promise<{
@@ -43,6 +43,8 @@ export declare class SalesController {
             date: Date;
             customerName: string | null;
             customerEmail: string | null;
+            sellerId: number | null;
+            sellerName: string | null;
             channel: string;
             paymentMethod: string;
             amountPaid: number;
@@ -85,6 +87,8 @@ export declare class SalesController {
         date: Date;
         customerName: string | null;
         customerEmail: string | null;
+        sellerId: number | null;
+        sellerName: string | null;
         channel: string;
         paymentMethod: string;
         amountPaid: number;

@@ -7,6 +7,8 @@ export declare class SalesService {
         customerEmail?: string;
         paymentMethod?: string;
         amountPaid?: number;
+        sellerId?: number;
+        sellerName?: string;
         items: {
             productId: number;
             quantity: number;
@@ -49,6 +51,8 @@ export declare class SalesService {
             date: Date;
             customerName: string | null;
             customerEmail: string | null;
+            sellerId: number | null;
+            sellerName: string | null;
             channel: string;
             paymentMethod: string;
             amountPaid: number;
@@ -91,6 +95,8 @@ export declare class SalesService {
         date: Date;
         customerName: string | null;
         customerEmail: string | null;
+        sellerId: number | null;
+        sellerName: string | null;
         channel: string;
         paymentMethod: string;
         amountPaid: number;

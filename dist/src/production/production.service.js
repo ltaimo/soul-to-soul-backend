@@ -21,6 +21,8 @@ let ProductionService = class ProductionService {
     async runProductionBatch(finishedGoodId, targetQuantity) {
         if (targetQuantity <= 0)
             throw new common_1.BadRequestException('Quantity must be positive');
+        if (!Number.isInteger(targetQuantity))
+            throw new common_1.BadRequestException('Target quantity must be a whole number');
         return this.prisma.$transaction(async (tx) => {
             const product = await tx.product.findUnique({
                 where: { id: finishedGoodId },
@@ -34,6 +36,9 @@ let ProductionService = class ProductionService {
             for (const bomItem of product.bomAsFinishedGood) {
                 const requiredQty = bomItem.quantityRequired * targetQuantity;
                 const component = bomItem.component;
+                if (!Number.isInteger(requiredQty)) {
+                    throw new common_1.BadRequestException(`Required quantity for ${component.name} must resolve to a whole stock unit. Required: ${requiredQty}`);
+                }
                 if (component.stock < requiredQty) {
                     throw new common_1.BadRequestException(`Insufficient stock of ${component.name}. Required: ${requiredQty}, Available: ${component.stock}`);
                 }
@@ -99,6 +104,47 @@ let ProductionService = class ProductionService {
             where: { finishedGoodId: productId },
             include: { component: true }
         });
+    }
+    async setBOMItem(finishedGoodId, componentId, quantityRequired) {
+        if (!finishedGoodId || !componentId) {
+            throw new common_1.BadRequestException('Finished good and component are required');
+        }
+        if (finishedGoodId === componentId) {
+            throw new common_1.BadRequestException('A product cannot be its own component');
+        }
+        if (!quantityRequired || quantityRequired <= 0) {
+            throw new common_1.BadRequestException('Quantity required must be positive');
+        }
+        const [finishedGood, component] = await Promise.all([
+            this.prisma.product.findUnique({ where: { id: finishedGoodId } }),
+            this.prisma.product.findUnique({ where: { id: componentId } }),
+        ]);
+        if (!finishedGood)
+            throw new common_1.BadRequestException('Finished good not found');
+        if (!component)
+            throw new common_1.BadRequestException('Component not found');
+        const bomItem = await this.prisma.billOfMaterial.upsert({
+            where: {
+                finishedGoodId_componentId: {
+                    finishedGoodId,
+                    componentId,
+                }
+            },
+            create: {
+                finishedGoodId,
+                componentId,
+                quantityRequired,
+            },
+            update: {
+                quantityRequired,
+            },
+            include: { component: true }
+        });
+        return { success: true, bomItem };
+    }
+    async deleteBOMItem(id) {
+        await this.prisma.billOfMaterial.delete({ where: { id } });
+        return { success: true };
     }
 };
 exports.ProductionService = ProductionService;

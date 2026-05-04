@@ -5,11 +5,11 @@ export declare class UsersController {
     getAllUsers(): Promise<{
         id: number;
         status: string;
-        updatedAt: Date;
-        fullName: string;
         email: string;
+        fullName: string;
         role: string;
         createdAt: Date;
+        updatedAt: Date;
         createdBy: number | null;
         updatedBy: number | null;
     }[]>;
@@ -18,11 +18,11 @@ export declare class UsersController {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -32,11 +32,11 @@ export declare class UsersController {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -46,11 +46,11 @@ export declare class UsersController {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };
@@ -60,11 +60,11 @@ export declare class UsersController {
         user: {
             id: number;
             status: string;
-            updatedAt: Date;
-            fullName: string;
             email: string;
+            fullName: string;
             role: string;
             createdAt: Date;
+            updatedAt: Date;
             createdBy: number | null;
             updatedBy: number | null;
         };

@@ -21,6 +21,8 @@ let InventoryService = class InventoryService {
     async receiveGoods(productId, quantity, landedCost, supplierId) {
         if (quantity <= 0)
             throw new common_1.BadRequestException('Quantity must be positive');
+        if (!Number.isInteger(quantity))
+            throw new common_1.BadRequestException('Quantity must be a whole number');
         return this.prisma.$transaction(async (tx) => {
             const product = await tx.product.findUnique({
                 where: { id: productId },
@@ -113,7 +115,56 @@ let InventoryService = class InventoryService {
         return this.prisma.product.findMany();
     }
     async getAllSuppliers() {
-        return this.prisma.supplier.findMany();
+        return this.prisma.supplier.findMany({
+            orderBy: { name: 'asc' },
+            include: {
+                _count: {
+                    select: {
+                        products: true,
+                        purchases: true,
+                    }
+                }
+            }
+        });
+    }
+    async createSupplier(data) {
+        if (!data.name || !data.name.trim()) {
+            throw new common_1.BadRequestException('Supplier name is required');
+        }
+        const supplier = await this.prisma.supplier.create({
+            data: {
+                name: data.name.trim(),
+                category: data.category?.trim() || 'General',
+                leadTime: data.leadTime?.trim() || 'Not set',
+                status: data.status || 'Active',
+            }
+        });
+        return { success: true, supplier };
+    }
+    async updateSupplier(id, data) {
+        if (!data.name || !data.name.trim()) {
+            throw new common_1.BadRequestException('Supplier name is required');
+        }
+        const supplier = await this.prisma.supplier.update({
+            where: { id },
+            data: {
+                name: data.name.trim(),
+                category: data.category?.trim() || 'General',
+                leadTime: data.leadTime?.trim() || 'Not set',
+                status: data.status || 'Active',
+            }
+        });
+        return { success: true, supplier };
+    }
+    async updateSupplierStatus(id, status) {
+        if (!['Active', 'Inactive'].includes(status)) {
+            throw new common_1.BadRequestException('Invalid supplier status');
+        }
+        const supplier = await this.prisma.supplier.update({
+            where: { id },
+            data: { status }
+        });
+        return { success: true, supplier };
     }
 };
 exports.InventoryService = InventoryService;

@@ -114,6 +114,8 @@ model Sale {
   id           Int        @id @default(autoincrement())
   customerName String?
   customerEmail String?
+  sellerId     Int?
+  sellerName   String?
   channel      String     @default("Store")
   paymentMethod String    @default("Cash")
   amountPaid   Float      @default(0)

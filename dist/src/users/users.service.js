@@ -51,6 +51,12 @@ let UsersService = class UsersService {
     constructor(prisma) {
         this.prisma = prisma;
     }
+    allowedRoles = ['admin', 'manager', 'cashier', 'salesperson', 'stock_manager', 'production_manager', 'viewer', 'staff'];
+    validateRole(role) {
+        if (role && !this.allowedRoles.includes(role)) {
+            throw new common_1.BadRequestException('Invalid user role.');
+        }
+    }
     async seedDefaultAdmin() {
         const userCount = await this.prisma.user.count();
         if (userCount === 0) {
@@ -68,6 +74,7 @@ let UsersService = class UsersService {
         }
     }
     async createUser(data) {
+        this.validateRole(data.role);
         if (!data.password || data.password.length < 6) {
             throw new common_1.BadRequestException('Password must be at least 6 characters.');
         }
@@ -123,6 +130,7 @@ let UsersService = class UsersService {
         return { success: true, user: safeUser };
     }
     async changeRole(id, role, updatedBy) {
+        this.validateRole(role);
         const userTarget = await this.prisma.user.findUnique({ where: { id } });
         if (userTarget?.role === 'admin' && role !== 'admin') {
             const activeAdmins = await this.prisma.user.count({ where: { role: 'admin', status: 'active' } });
