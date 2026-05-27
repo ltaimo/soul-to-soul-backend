@@ -21,10 +21,13 @@ let SalesController = class SalesController {
     constructor(salesService) {
         this.salesService = salesService;
     }
-    async confirmSale(req, customerName, customerEmail, paymentMethod, amountPaid, items) {
+    async confirmSale(req, customerId, customerName, customerEmail, customerPhone, saveCustomer, paymentMethod, amountPaid, items) {
         return this.salesService.processSale({
+            customerId: customerId ? Number(customerId) : undefined,
             customerName,
             customerEmail,
+            customerPhone,
+            saveCustomer,
             paymentMethod,
             amountPaid,
             sellerId: req.user?.id,
@@ -41,13 +44,16 @@ __decorate([
     (0, common_1.Post)('confirm'),
     (0, roles_decorator_1.Roles)('manager', 'cashier', 'salesperson', 'staff'),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Body)('customerName')),
-    __param(2, (0, common_1.Body)('customerEmail')),
-    __param(3, (0, common_1.Body)('paymentMethod')),
-    __param(4, (0, common_1.Body)('amountPaid')),
-    __param(5, (0, common_1.Body)('items')),
+    __param(1, (0, common_1.Body)('customerId')),
+    __param(2, (0, common_1.Body)('customerName')),
+    __param(3, (0, common_1.Body)('customerEmail')),
+    __param(4, (0, common_1.Body)('customerPhone')),
+    __param(5, (0, common_1.Body)('saveCustomer')),
+    __param(6, (0, common_1.Body)('paymentMethod')),
+    __param(7, (0, common_1.Body)('amountPaid')),
+    __param(8, (0, common_1.Body)('items')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, String, Number, Array]),
+    __metadata("design:paramtypes", [Object, Number, String, String, String, Boolean, String, Number, Array]),
     __metadata("design:returntype", Promise)
 ], SalesController.prototype, "confirmSale", null);
 __decorate([

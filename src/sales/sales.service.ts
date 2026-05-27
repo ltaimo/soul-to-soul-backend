@@ -6,8 +6,11 @@ export class SalesService {
   constructor(private prisma: PrismaService) {}
 
   async processSale(data: {
+    customerId?: number;
     customerName?: string;
     customerEmail?: string;
+    customerPhone?: string;
+    saveCustomer?: boolean;
     paymentMethod?: string;
     amountPaid?: number;
     sellerId?: number;
@@ -23,6 +26,26 @@ export class SalesService {
     return this.prisma.$transaction(async (tx) => {
       let totalRevenue = 0;
       let totalCogs = 0;
+      let customer: any = null;
+
+      if (data.customerId) {
+        customer = await tx.customer.findUnique({ where: { id: data.customerId } });
+        if (!customer) throw new BadRequestException('Customer not found.');
+      } else if (data.saveCustomer && data.customerName && data.customerName !== 'Retail Customer') {
+        const existingCustomer = data.customerEmail
+          ? await tx.customer.findFirst({ where: { email: data.customerEmail } })
+          : data.customerPhone
+            ? await tx.customer.findFirst({ where: { phone: data.customerPhone } })
+            : null;
+
+        customer = existingCustomer || await tx.customer.create({
+          data: {
+            fullName: data.customerName,
+            email: data.customerEmail || null,
+            phone: data.customerPhone || null,
+          }
+        });
+      }
       
       const saleItemsToCreate: any[] = [];
 
@@ -45,7 +68,9 @@ export class SalesService {
         }
 
         // Calculate line financial metrics based on LOCKED selling and cost price
-        const lineRevenue = item.quantity * product.sellingPrice;
+        const discountRate = customer?.discountPercent ? customer.discountPercent / 100 : 0;
+        const unitSellingPrice = product.sellingPrice * (1 - discountRate);
+        const lineRevenue = item.quantity * unitSellingPrice;
         const lineCogs = item.quantity * product.costPrice;
 
         totalRevenue += lineRevenue;
@@ -54,7 +79,7 @@ export class SalesService {
         saleItemsToCreate.push({
           productId: product.id,
           quantity: item.quantity,
-          unitSellingPrice: product.sellingPrice,
+          unitSellingPrice,
           unitCogs: product.costPrice // COGS statically locked at time of sale!
         });
 
@@ -88,8 +113,9 @@ export class SalesService {
       // 3. Create Sale Header and Items
       const sale = await tx.sale.create({
         data: {
-          customerName: data.customerName || 'Retail Customer',
-          customerEmail: data.customerEmail || null,
+          customerId: customer?.id || null,
+          customerName: customer?.fullName || data.customerName || 'Retail Customer',
+          customerEmail: customer?.email || data.customerEmail || null,
           sellerId: data.sellerId || null,
           sellerName: seller?.fullName || data.sellerName || seller?.email || null,
           paymentMethod,

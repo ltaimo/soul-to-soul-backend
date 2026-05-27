@@ -9,7 +9,7 @@ export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('kpis')
-  @Roles('manager', 'stock_manager', 'production_manager', 'viewer')
+  @Roles('manager')
   async getKPIs() {
     return this.analyticsService.getFinancialKPIs();
   }

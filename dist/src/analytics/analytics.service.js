@@ -28,19 +28,19 @@ let AnalyticsService = class AnalyticsService {
         }
         const inventory = await this.prisma.product.findMany({});
         let totalInvValue = 0;
-        const invBreakdown = { Raw: 0, Packaging: 0, Finished: 0, Unknown: 0 };
+        const invBreakdown = { 'Raw Material': 0, Packaging: 0, 'Finished Good': 0, Other: 0 };
         inventory.forEach(p => {
             if (p.stock > 0) {
                 const value = p.stock * p.costPrice;
                 totalInvValue += value;
-                if (p.type === 'Raw')
-                    invBreakdown.Raw += value;
+                if (p.type === 'Raw Material' || p.type === 'Raw')
+                    invBreakdown['Raw Material'] += value;
                 else if (p.type === 'Packaging')
                     invBreakdown.Packaging += value;
-                else if (p.type === 'Finished')
-                    invBreakdown.Finished += value;
+                else if (p.type === 'Finished Good' || p.type === 'Finished')
+                    invBreakdown['Finished Good'] += value;
                 else
-                    invBreakdown.Unknown += value;
+                    invBreakdown.Other += value;
             }
         });
         const sales = await this.prisma.sale.findMany();
@@ -86,7 +86,7 @@ let AnalyticsService = class AnalyticsService {
         const products = await this.prisma.product.findMany({
             orderBy: { stock: 'asc' }
         });
-        const lowStockAlerts = products.filter(p => p.stock < 50 && p.stock > 0);
+        const lowStockAlerts = products.filter(p => p.stock > 0 && p.minStock > 0 && p.stock <= p.minStock);
         const stockOutAlerts = products.filter(p => p.stock === 0);
         const now = new Date();
         const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);

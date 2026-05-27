@@ -3,8 +3,11 @@ export declare class SalesService {
     private prisma;
     constructor(prisma: PrismaService);
     processSale(data: {
+        customerId?: number;
         customerName?: string;
         customerEmail?: string;
+        customerPhone?: string;
+        saveCustomer?: boolean;
         paymentMethod?: string;
         amountPaid?: number;
         sellerId?: number;
@@ -59,6 +62,7 @@ export declare class SalesService {
             changeGiven: number;
             totalRevenue: number;
             totalCogs: number;
+            customerId: number | null;
         };
     }>;
     getRecentSales(): Promise<({
@@ -103,5 +107,6 @@ export declare class SalesService {
         changeGiven: number;
         totalRevenue: number;
         totalCogs: number;
+        customerId: number | null;
     })[]>;
 }

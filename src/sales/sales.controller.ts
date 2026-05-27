@@ -10,15 +10,21 @@ export class SalesController {
   @Roles('manager', 'cashier', 'salesperson', 'staff')
   async confirmSale(
     @Req() req: any,
+    @Body('customerId') customerId: number,
     @Body('customerName') customerName: string,
     @Body('customerEmail') customerEmail: string,
+    @Body('customerPhone') customerPhone: string,
+    @Body('saveCustomer') saveCustomer: boolean,
     @Body('paymentMethod') paymentMethod: string,
     @Body('amountPaid') amountPaid: number,
     @Body('items') items: { productId: number; quantity: number }[]
   ) {
     return this.salesService.processSale({
+      customerId: customerId ? Number(customerId) : undefined,
       customerName,
       customerEmail,
+      customerPhone,
+      saveCustomer,
       paymentMethod,
       amountPaid,
       sellerId: req.user?.id,

@@ -11,6 +11,7 @@ import { ProductsModule } from './products/products.module';
 import { SettingsModule } from './settings/settings.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { CustomersModule } from './customers/customers.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 
@@ -26,7 +27,8 @@ import { RolesGuard } from './auth/roles.guard';
     ProductsModule,
     SettingsModule,
     UsersModule,
-    AuthModule
+    AuthModule,
+    CustomersModule
   ],
   controllers: [AppController],
   providers: [

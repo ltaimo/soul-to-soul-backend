@@ -2,7 +2,7 @@ import { SalesService } from './sales.service';
 export declare class SalesController {
     private readonly salesService;
     constructor(salesService: SalesService);
-    confirmSale(req: any, customerName: string, customerEmail: string, paymentMethod: string, amountPaid: number, items: {
+    confirmSale(req: any, customerId: number, customerName: string, customerEmail: string, customerPhone: string, saveCustomer: boolean, paymentMethod: string, amountPaid: number, items: {
         productId: number;
         quantity: number;
     }[]): Promise<{
@@ -51,6 +51,7 @@ export declare class SalesController {
             changeGiven: number;
             totalRevenue: number;
             totalCogs: number;
+            customerId: number | null;
         };
     }>;
     getSales(): Promise<({
@@ -95,5 +96,6 @@ export declare class SalesController {
         changeGiven: number;
         totalRevenue: number;
         totalCogs: number;
+        customerId: number | null;
     })[]>;
 }

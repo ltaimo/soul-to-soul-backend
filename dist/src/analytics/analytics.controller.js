@@ -29,7 +29,7 @@ let AnalyticsController = class AnalyticsController {
 exports.AnalyticsController = AnalyticsController;
 __decorate([
     (0, common_1.Get)('kpis'),
-    (0, roles_decorator_1.Roles)('manager', 'stock_manager', 'production_manager', 'viewer'),
+    (0, roles_decorator_1.Roles)('manager'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

@@ -110,8 +110,27 @@ model BillOfMaterial {
   @@unique([finishedGoodId, componentId])
 }
 
+model Customer {
+  id              Int      @id @default(autoincrement())
+  fullName        String
+  phone           String?
+  email           String?
+  loyaltyTier     String   @default("Standard")
+  discountPercent Float    @default(0)
+  notes           String?
+  status          String   @default("Active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sales           Sale[]
+
+  @@index([email])
+  @@index([phone])
+}
+
 model Sale {
   id           Int        @id @default(autoincrement())
+  customerId   Int?
   customerName String?
   customerEmail String?
   sellerId     Int?
@@ -125,6 +144,7 @@ model Sale {
   totalCogs    Float
 
   items        SaleItem[]
+  customer     Customer?  @relation(fields: [customerId], references: [id])
 }
 
 model SaleItem {

@@ -25,6 +25,26 @@ let SalesService = class SalesService {
         return this.prisma.$transaction(async (tx) => {
             let totalRevenue = 0;
             let totalCogs = 0;
+            let customer = null;
+            if (data.customerId) {
+                customer = await tx.customer.findUnique({ where: { id: data.customerId } });
+                if (!customer)
+                    throw new common_1.BadRequestException('Customer not found.');
+            }
+            else if (data.saveCustomer && data.customerName && data.customerName !== 'Retail Customer') {
+                const existingCustomer = data.customerEmail
+                    ? await tx.customer.findFirst({ where: { email: data.customerEmail } })
+                    : data.customerPhone
+                        ? await tx.customer.findFirst({ where: { phone: data.customerPhone } })
+                        : null;
+                customer = existingCustomer || await tx.customer.create({
+                    data: {
+                        fullName: data.customerName,
+                        email: data.customerEmail || null,
+                        phone: data.customerPhone || null,
+                    }
+                });
+            }
             const saleItemsToCreate = [];
             for (const item of items) {
                 if (item.quantity <= 0) {
@@ -39,14 +59,16 @@ let SalesService = class SalesService {
                 if (product.stock < item.quantity) {
                     throw new common_1.BadRequestException(`Insufficient stock for ${product.name}. Needed: ${item.quantity}, Available: ${product.stock}`);
                 }
-                const lineRevenue = item.quantity * product.sellingPrice;
+                const discountRate = customer?.discountPercent ? customer.discountPercent / 100 : 0;
+                const unitSellingPrice = product.sellingPrice * (1 - discountRate);
+                const lineRevenue = item.quantity * unitSellingPrice;
                 const lineCogs = item.quantity * product.costPrice;
                 totalRevenue += lineRevenue;
                 totalCogs += lineCogs;
                 saleItemsToCreate.push({
                     productId: product.id,
                     quantity: item.quantity,
-                    unitSellingPrice: product.sellingPrice,
+                    unitSellingPrice,
                     unitCogs: product.costPrice
                 });
                 await tx.product.update({
@@ -73,8 +95,9 @@ let SalesService = class SalesService {
                 : null;
             const sale = await tx.sale.create({
                 data: {
-                    customerName: data.customerName || 'Retail Customer',
-                    customerEmail: data.customerEmail || null,
+                    customerId: customer?.id || null,
+                    customerName: customer?.fullName || data.customerName || 'Retail Customer',
+                    customerEmail: customer?.email || data.customerEmail || null,
                     sellerId: data.sellerId || null,
                     sellerName: seller?.fullName || data.sellerName || seller?.email || null,
                     paymentMethod,
