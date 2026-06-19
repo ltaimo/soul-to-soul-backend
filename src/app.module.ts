@@ -12,6 +12,7 @@ import { SettingsModule } from './settings/settings.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CustomersModule } from './customers/customers.module';
+import { HrModule } from './hr/hr.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 
@@ -28,7 +29,8 @@ import { RolesGuard } from './auth/roles.guard';
     SettingsModule,
     UsersModule,
     AuthModule,
-    CustomersModule
+    CustomersModule,
+    HrModule
   ],
   controllers: [AppController],
   providers: [
