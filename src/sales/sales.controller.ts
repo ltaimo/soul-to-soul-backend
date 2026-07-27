@@ -14,9 +14,12 @@ export class SalesController {
     @Body('customerName') customerName: string,
     @Body('customerEmail') customerEmail: string,
     @Body('customerPhone') customerPhone: string,
+    @Body('customerCode') customerCode: string,
     @Body('saveCustomer') saveCustomer: boolean,
     @Body('paymentMethod') paymentMethod: string,
     @Body('amountPaid') amountPaid: number,
+    @Body('warehouseId') warehouseId: number,
+    @Body('redeemPoints') redeemPoints: boolean,
     @Body('items') items: { productId: number; quantity: number }[]
   ) {
     return this.salesService.processSale({
@@ -24,9 +27,12 @@ export class SalesController {
       customerName,
       customerEmail,
       customerPhone,
+      customerCode,
       saveCustomer,
       paymentMethod,
       amountPaid,
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      redeemPoints,
       sellerId: req.user?.id,
       sellerName: req.user?.fullName || req.user?.email,
       items,

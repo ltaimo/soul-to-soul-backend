@@ -21,8 +21,15 @@ export class CustomersService {
       throw new BadRequestException('Customer name is required');
     }
 
-    const customer = await this.prisma.customer.create({
-      data: this.toCustomerData(data),
+    const customer = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.customer.create({
+        data: this.toCustomerData(data),
+      });
+
+      return tx.customer.update({
+        where: { id: created.id },
+        data: { customerCode: data.customerCode?.trim() || `CUST-${String(created.id).padStart(5, '0')}` },
+      });
     });
 
     return { success: true, customer };
@@ -60,7 +67,7 @@ export class CustomersService {
       throw new BadRequestException('Discount must be between 0 and 100');
     }
 
-    return {
+    const customerData: any = {
       fullName: data.fullName.trim(),
       phone: data.phone?.trim() || null,
       email: data.email?.trim() || null,
@@ -69,5 +76,15 @@ export class CustomersService {
       notes: data.notes?.trim() || null,
       status: data.status || 'Active',
     };
+
+    if (data.customerCode !== undefined) {
+      customerData.customerCode = data.customerCode?.trim() || null;
+    }
+
+    if (data.loyaltyPoints !== undefined) {
+      customerData.loyaltyPoints = Math.max(0, Number(data.loyaltyPoints) || 0);
+    }
+
+    return customerData;
   }
 }

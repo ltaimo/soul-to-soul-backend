@@ -11,7 +11,7 @@ export class SettingsController {
     return this.settingsService.getSettings();
   }
 
-  @Roles('admin')
+  @Roles('admin', 'manager')
   @Put()
   async updateSettings(@Body() data: any) {
     return this.settingsService.updateSettings(data);
