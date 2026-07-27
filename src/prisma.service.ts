@@ -9,7 +9,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit() {
     await this.$connect();
-    await this.ensureProductionSchema();
+    this.ensureProductionSchema().catch((error) => {
+      console.warn(`Production schema bootstrap skipped: ${error?.message || error}`);
+    });
   }
 
   private async ensureProductionSchema() {
@@ -17,12 +19,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     if (!databaseUrl.startsWith('postgresql://') && !databaseUrl.startsWith('postgres://')) {
       return;
     }
+    if (databaseUrl.includes('pgbouncer=true')) {
+      return;
+    }
 
     if (!PrismaService.productionUpgradePromise) {
       PrismaService.productionUpgradePromise = this.runProductionUpgrade();
     }
 
-    await PrismaService.productionUpgradePromise;
+    await Promise.race([
+      PrismaService.productionUpgradePromise,
+      new Promise<void>((resolve) => setTimeout(resolve, 12000)),
+    ]);
   }
 
   private async runProductionUpgrade() {
