@@ -45,16 +45,24 @@ export class InventoryService {
       select: { id: true, stock: true, minStock: true },
     });
 
-    for (const product of products) {
-      await tx.warehouseStock.upsert({
-        where: { warehouseId_productId: { warehouseId, productId: product.id } },
-        update: {},
-        create: {
-          warehouseId,
-          productId: product.id,
-          quantity: product.stock || 0,
-          minStock: product.minStock || 0,
-        },
+    const existing = await tx.warehouseStock.findMany({
+      where: { warehouseId },
+      select: { productId: true },
+    });
+    const existingProductIds = new Set(existing.map((row) => row.productId));
+    const missingRows = products
+      .filter((product) => !existingProductIds.has(product.id))
+      .map((product) => ({
+        warehouseId,
+        productId: product.id,
+        quantity: product.stock || 0,
+        minStock: product.minStock || 0,
+      }));
+
+    if (missingRows.length) {
+      await tx.warehouseStock.createMany({
+        data: missingRows,
+        skipDuplicates: true,
       });
     }
   }
@@ -84,20 +92,27 @@ export class InventoryService {
   private async seedAllWarehouseStocks(tx: any = this.prisma) {
     const warehouses = await tx.warehouse.findMany({ select: { id: true } });
     const products = await tx.product.findMany({ select: { id: true, minStock: true } });
+    const existing = await tx.warehouseStock.findMany({
+      select: { warehouseId: true, productId: true },
+    });
+    const existingKeys = new Set(existing.map((row) => `${row.warehouseId}:${row.productId}`));
 
-    for (const warehouse of warehouses) {
-      for (const product of products) {
-        await tx.warehouseStock.upsert({
-          where: { warehouseId_productId: { warehouseId: warehouse.id, productId: product.id } },
-          update: {},
-          create: {
+    const missingRows = warehouses.flatMap((warehouse) =>
+      products
+        .filter((product) => !existingKeys.has(`${warehouse.id}:${product.id}`))
+        .map((product) => ({
             warehouseId: warehouse.id,
             productId: product.id,
             quantity: 0,
             minStock: product.minStock || 0,
-          },
-        });
-      }
+        })),
+    );
+
+    if (missingRows.length) {
+      await tx.warehouseStock.createMany({
+        data: missingRows,
+        skipDuplicates: true,
+      });
     }
   }
 
