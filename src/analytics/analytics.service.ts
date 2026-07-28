@@ -16,17 +16,50 @@ export class AnalyticsService {
       }
     }
 
-    const inventory = await this.prisma.product.findMany({});
+    const [
+      inventory,
+      warehouseStock,
+      warehouses,
+      transfers,
+      customers,
+      commercialPartners,
+      employees,
+      pendingPayments,
+      auditLogs,
+    ] = await Promise.all([
+      this.prisma.product.findMany({}),
+      this.prisma.warehouseStock.findMany({
+        include: { product: true, warehouse: true },
+      }),
+      this.prisma.warehouse.findMany({}),
+      this.prisma.stockTransfer.findMany({ include: { items: true } }),
+      this.prisma.customer.findMany({}),
+      this.prisma.commercialPartner.findMany({}),
+      this.prisma.employee.findMany({}),
+      this.prisma.hrPayment.findMany({ where: { status: 'Pending' } }),
+      this.prisma.auditLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+      }),
+    ]);
     let totalInvValue = 0;
-    const invBreakdown = { 'Raw Material': 0, Packaging: 0, 'Finished Good': 0, Other: 0 };
-    
-    inventory.forEach(p => {
-      if (p.stock > 0) {
-        const value = p.stock * p.costPrice;
+    const invBreakdown = {
+      'Raw Material': 0,
+      Packaging: 0,
+      'Finished Good': 0,
+      Other: 0,
+    };
+
+    warehouseStock.forEach((row) => {
+      const p = row.product;
+      if (row.quantity > 0) {
+        const value = row.quantity * p.costPrice;
         totalInvValue += value;
-        if (p.type === 'Raw Material' || p.type === 'Raw') invBreakdown['Raw Material'] += value;
+        if (p.type === 'Raw Material' || p.type === 'Raw')
+          invBreakdown['Raw Material'] += value;
         else if (p.type === 'Packaging') invBreakdown.Packaging += value;
-        else if (p.type === 'Finished Good' || p.type === 'Finished') invBreakdown['Finished Good'] += value;
+        else if (p.type === 'Finished Good' || p.type === 'Finished')
+          invBreakdown['Finished Good'] += value;
         else invBreakdown.Other += value;
       }
     });
@@ -36,16 +69,58 @@ export class AnalyticsService {
     let totalCogs = 0;
     const channelBreakdown = {};
 
-    sales.forEach(s => {
+    sales.forEach((s) => {
       totalRev += s.totalRevenue;
       totalCogs += s.totalCogs;
-      
+
       const ch = s.channel || 'Store';
       channelBreakdown[ch] = (channelBreakdown[ch] || 0) + s.totalRevenue;
     });
 
     const totalGrossProfit = totalRev - totalCogs;
-    const avgProfitMargin = totalRev > 0 ? (totalGrossProfit / totalRev) * 100 : 0;
+    const avgProfitMargin =
+      totalRev > 0 ? (totalGrossProfit / totalRev) * 100 : 0;
+    const inTransitTransfers = transfers.filter(
+      (transfer) => transfer.status === 'In Transit',
+    );
+    const transferUnitsInTransit = inTransitTransfers.reduce(
+      (sum, transfer) =>
+        sum +
+        transfer.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+      0,
+    );
+    const pendingPaymentsValue = pendingPayments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0,
+    );
+    const activeEmployees = employees.filter(
+      (employee) => employee.status === 'Active',
+    );
+    const activePartners = commercialPartners.filter(
+      (partner) => partner.status === 'Active',
+    );
+    const commissionPayable = sales.reduce(
+      (sum, sale: any) => sum + (sale.commissionAmount || 0),
+      0,
+    );
+    const loyaltyPointsIssued = customers.reduce(
+      (sum, customer) => sum + (customer.loyaltyPoints || 0),
+      0,
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const auditEventsToday = await this.prisma.auditLog.count({
+      where: {
+        createdAt: {
+          gte: new Date(`${today}T00:00:00.000Z`),
+        },
+      },
+    });
+
+    const warehouseValueMap = warehouseStock.reduce((acc, row) => {
+      const name = row.warehouse?.name || 'Unassigned';
+      acc[name] = (acc[name] || 0) + row.quantity * row.product.costPrice;
+      return acc;
+    }, {});
 
     // Time-series for sales chart
     const salesOverTime = sales.reduce((acc, sale) => {
@@ -53,7 +128,7 @@ export class AnalyticsService {
       if (!acc[d]) acc[d] = { date: d, revenue: 0, cogs: 0, profit: 0 };
       acc[d].revenue += sale.totalRevenue;
       acc[d].cogs += sale.totalCogs;
-      acc[d].profit += (sale.totalRevenue - sale.totalCogs);
+      acc[d].profit += sale.totalRevenue - sale.totalCogs;
       return acc;
     }, {});
 
@@ -63,8 +138,39 @@ export class AnalyticsService {
       totalRevenue: totalRev,
       totalGrossProfit: totalGrossProfit,
       avgProfitMargin: avgProfitMargin,
+      productCount: inventory.length,
+      warehouseCount: warehouses.length,
+      activeWarehouseCount: warehouses.filter(
+        (warehouse) => warehouse.status === 'Active',
+      ).length,
+      totalWarehouseUnits: warehouseStock.reduce(
+        (sum, row) => sum + row.quantity,
+        0,
+      ),
+      inTransitTransferCount: inTransitTransfers.length,
+      transferUnitsInTransit,
+      activeEmployees: activeEmployees.length,
+      monthlyPayroll: activeEmployees.reduce(
+        (sum, employee) => sum + employee.salary,
+        0,
+      ),
+      pendingPaymentsValue,
+      loyaltyCustomerCount: customers.filter(
+        (customer) => customer.status !== 'Inactive',
+      ).length,
+      loyaltyPointsIssued,
+      activeCommercialPartners: activePartners.length,
+      commissionPayable,
+      auditEventsToday,
       channelBreakdown,
-      salesTrend: Object.values(salesOverTime).sort((a: any, b: any) => a.date.localeCompare(b.date))
+      warehouseValueBreakdown: Object.entries(warehouseValueMap)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a: any, b: any) => b.value - a.value)
+        .slice(0, 6),
+      recentActivity: auditLogs,
+      salesTrend: Object.values(salesOverTime).sort((a: any, b: any) =>
+        a.date.localeCompare(b.date),
+      ),
     };
 
     this.cache.set('kpis', { timestamp: Date.now(), data: result });
@@ -79,30 +185,60 @@ export class AnalyticsService {
       }
     }
 
-    const products = await this.prisma.product.findMany({
-      orderBy: { stock: 'asc' }
-    });
-    
-    const lowStockAlerts = products.filter(p => p.stock > 0 && p.minStock > 0 && p.stock <= p.minStock);
-    const stockOutAlerts = products.filter(p => p.stock === 0);
+    const [products, warehouseRows, inTransitTransfers, pendingPayments] =
+      await Promise.all([
+        this.prisma.product.findMany({ orderBy: { stock: 'asc' } }),
+        this.prisma.warehouseStock.findMany({
+          include: { product: true, warehouse: true },
+        }),
+        this.prisma.stockTransfer.findMany({
+          where: { status: 'In Transit' },
+          include: {
+            items: true,
+            sourceWarehouse: true,
+            destinationWarehouse: true,
+          },
+        }),
+        this.prisma.hrPayment.findMany({ where: { status: 'Pending' } }),
+      ]);
+    const lowStockAlerts = warehouseRows.filter(
+      (row) =>
+        row.quantity > 0 && row.minStock > 0 && row.quantity <= row.minStock,
+    );
+    const stockOutAlerts = warehouseRows.filter((row) => row.quantity === 0);
+    const inTransitUnits = inTransitTransfers.reduce(
+      (sum, transfer) =>
+        sum +
+        transfer.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+      0,
+    );
 
     const now = new Date();
     const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const expiringBatches = await this.prisma.inventoryBatch.findMany({
-      where: { 
+      where: {
         expiryDate: { lte: thirtyDays, not: null },
-        quantity: { gt: 0 }
+        quantity: { gt: 0 },
       },
-      include: { product: true }
+      include: { product: true },
     });
 
     const result = {
       lowStockCount: lowStockAlerts.length,
       stockOutCount: stockOutAlerts.length,
       expiringCount: expiringBatches.length,
+      inTransitTransferCount: inTransitTransfers.length,
+      inTransitUnits,
+      pendingPaymentCount: pendingPayments.length,
+      pendingPaymentValue: pendingPayments.reduce(
+        (sum, payment) => sum + payment.amount,
+        0,
+      ),
       lowStockList: lowStockAlerts,
       stockOutList: stockOutAlerts,
-      expiringList: expiringBatches
+      expiringList: expiringBatches,
+      inTransitList: inTransitTransfers,
+      productCount: products.length,
     };
 
     this.cache.set('alerts', { timestamp: Date.now(), data: result });

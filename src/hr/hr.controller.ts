@@ -28,7 +28,10 @@ export class HrController {
   }
 
   @Patch('employees/:id/status')
-  async updateEmployeeStatus(@Param('id') id: string, @Body('status') status: string) {
+  async updateEmployeeStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
     return this.hrService.updateEmployeeStatus(Number(id), status);
   }
 

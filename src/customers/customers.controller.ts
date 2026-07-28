@@ -26,7 +26,10 @@ export class CustomersController {
 
   @Patch(':id/status')
   @Roles('manager')
-  async updateCustomerStatus(@Param('id') id: string, @Body('status') status: string) {
+  async updateCustomerStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
     return this.customersService.updateCustomerStatus(Number(id), status);
   }
 }

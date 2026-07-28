@@ -19,8 +19,12 @@ export class SalesController {
     @Body('paymentMethod') paymentMethod: string,
     @Body('amountPaid') amountPaid: number,
     @Body('warehouseId') warehouseId: number,
+    @Body('commercialPartnerId') commercialPartnerId: number,
+    @Body('channel') channel: string,
+    @Body('orderReference') orderReference: string,
+    @Body('fulfillmentStatus') fulfillmentStatus: string,
     @Body('redeemPoints') redeemPoints: boolean,
-    @Body('items') items: { productId: number; quantity: number }[]
+    @Body('items') items: { productId: number; quantity: number }[],
   ) {
     return this.salesService.processSale({
       customerId: customerId ? Number(customerId) : undefined,
@@ -32,6 +36,12 @@ export class SalesController {
       paymentMethod,
       amountPaid,
       warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      commercialPartnerId: commercialPartnerId
+        ? Number(commercialPartnerId)
+        : undefined,
+      channel,
+      orderReference,
+      fulfillmentStatus,
       redeemPoints,
       sellerId: req.user?.id,
       sellerName: req.user?.fullName || req.user?.email,

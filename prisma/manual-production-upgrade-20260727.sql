@@ -103,6 +103,29 @@ ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "pointsEarned" INTEGER NOT NULL DEFA
 ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "pointsRedeemed" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "SaleItem" ADD COLUMN IF NOT EXISTS "loyaltyPointsEarned" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "SaleItem" ADD COLUMN IF NOT EXISTS "redemptionPointsCost" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "HrPayment" ADD COLUMN IF NOT EXISTS "periodicity" TEXT NOT NULL DEFAULT 'One-time';
+ALTER TABLE "HrPayment" ADD COLUMN IF NOT EXISTS "periodStart" TIMESTAMP(3);
+ALTER TABLE "HrPayment" ADD COLUMN IF NOT EXISTS "periodEnd" TIMESTAMP(3);
+ALTER TABLE "HrPayment" ADD COLUMN IF NOT EXISTS "nextDueDate" TIMESTAMP(3);
+
+CREATE TABLE IF NOT EXISTS "CommercialPartner" (
+  "id" SERIAL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "type" TEXT NOT NULL DEFAULT 'Seller',
+  "phone" TEXT,
+  "email" TEXT,
+  "commissionRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "notes" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'Active',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "commercialPartnerId" INTEGER;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "sellerType" TEXT;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "commissionRate" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "commissionAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "hrPaymentTypes" TEXT NOT NULL DEFAULT 'Salary,Rent,Advance,Bonus,Transport,Utilities,Commission,Other';
 ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "paymentMethods" TEXT NOT NULL DEFAULT 'Cash,M-Pesa,E-Mola,Card,Bank Transfer';
 ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "warehouseTypes" TEXT NOT NULL DEFAULT 'Warehouse,Shop,Storage,Transit';
@@ -129,6 +152,58 @@ CREATE INDEX IF NOT EXISTS "StockMovement_transferId_idx" ON "StockMovement"("tr
 CREATE INDEX IF NOT EXISTS "StockMovement_movementType_idx" ON "StockMovement"("movementType");
 CREATE UNIQUE INDEX IF NOT EXISTS "Customer_customerCode_key" ON "Customer"("customerCode");
 CREATE INDEX IF NOT EXISTS "Customer_customerCode_idx" ON "Customer"("customerCode");
+CREATE INDEX IF NOT EXISTS "HrPayment_periodicity_idx" ON "HrPayment"("periodicity");
+CREATE INDEX IF NOT EXISTS "HrPayment_nextDueDate_idx" ON "HrPayment"("nextDueDate");
+CREATE INDEX IF NOT EXISTS "CommercialPartner_type_idx" ON "CommercialPartner"("type");
+CREATE INDEX IF NOT EXISTS "CommercialPartner_status_idx" ON "CommercialPartner"("status");
+CREATE INDEX IF NOT EXISTS "CommercialPartner_phone_idx" ON "CommercialPartner"("phone");
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'Sale_commercialPartnerId_fkey'
+  ) THEN
+    ALTER TABLE "Sale"
+    ADD CONSTRAINT "Sale_commercialPartnerId_fkey"
+    FOREIGN KEY ("commercialPartnerId") REFERENCES "CommercialPartner"("id")
+    ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- Company contact and social fields used on loyalty cards, receipts and exports.
+ALTER TABLE "SystemSetting"
+  ADD COLUMN IF NOT EXISTS "companyPhone" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyWhatsApp" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyEmail" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyAddress" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyWebsite" TEXT,
+  ADD COLUMN IF NOT EXISTS "instagramUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "facebookUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "tiktokUrl" TEXT;
+
+CREATE TABLE IF NOT EXISTS "AuditLog" (
+  "id" SERIAL PRIMARY KEY,
+  "userId" INTEGER,
+  "userName" TEXT,
+  "userEmail" TEXT,
+  "userRole" TEXT,
+  "action" TEXT NOT NULL,
+  "entityType" TEXT,
+  "entityId" TEXT,
+  "method" TEXT NOT NULL,
+  "path" TEXT NOT NULL,
+  "ipAddress" TEXT,
+  "userAgent" TEXT,
+  "machine" TEXT,
+  "metadata" TEXT,
+  "statusCode" INTEGER,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS "AuditLog_userId_idx" ON "AuditLog"("userId");
+CREATE INDEX IF NOT EXISTS "AuditLog_entityType_idx" ON "AuditLog"("entityType");
+CREATE INDEX IF NOT EXISTS "AuditLog_action_idx" ON "AuditLog"("action");
+CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
 
 DO $$
 BEGIN
@@ -221,3 +296,36 @@ WHERE "warehouseId" IS NULL;
 UPDATE "Customer"
 SET "customerCode" = 'CUST-' || LPAD("id"::text, 5, '0')
 WHERE "customerCode" IS NULL;
+-- Reseller workflow configuration, sale channel tracking and order status.
+ALTER TABLE "CommercialPartner"
+  ADD COLUMN IF NOT EXISTS "warehouseId" INTEGER,
+  ADD COLUMN IF NOT EXISTS "agreementType" TEXT NOT NULL DEFAULT 'Direct Sale',
+  ADD COLUMN IF NOT EXISTS "pricePolicy" TEXT NOT NULL DEFAULT 'Standard',
+  ADD COLUMN IF NOT EXISTS "priceAdjustment" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "paymentTerms" TEXT,
+  ADD COLUMN IF NOT EXISTS "settlementCycle" TEXT NOT NULL DEFAULT 'On Sale',
+  ADD COLUMN IF NOT EXISTS "creditLimit" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "defaultSaleChannel" TEXT NOT NULL DEFAULT 'Store',
+  ADD COLUMN IF NOT EXISTS "trackingEnabled" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "Sale"
+  ADD COLUMN IF NOT EXISTS "orderReference" TEXT,
+  ADD COLUMN IF NOT EXISTS "fulfillmentStatus" TEXT NOT NULL DEFAULT 'Delivered';
+
+CREATE INDEX IF NOT EXISTS "CommercialPartner_agreementType_idx" ON "CommercialPartner"("agreementType");
+CREATE INDEX IF NOT EXISTS "CommercialPartner_warehouseId_idx" ON "CommercialPartner"("warehouseId");
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE constraint_name = 'CommercialPartner_warehouseId_fkey'
+      AND table_name = 'CommercialPartner'
+  ) THEN
+    ALTER TABLE "CommercialPartner"
+      ADD CONSTRAINT "CommercialPartner_warehouseId_fkey"
+      FOREIGN KEY ("warehouseId") REFERENCES "Warehouse"("id")
+      ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;

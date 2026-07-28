@@ -7,17 +7,22 @@ export class ProductionService {
   constructor(private prisma: PrismaService) {}
 
   async runProductionBatch(finishedGoodId: number, targetQuantity: number) {
-    if (targetQuantity <= 0) throw new BadRequestException('Quantity must be positive');
-    if (!Number.isInteger(targetQuantity)) throw new BadRequestException('Target quantity must be a whole number');
+    if (targetQuantity <= 0)
+      throw new BadRequestException('Quantity must be positive');
+    if (!Number.isInteger(targetQuantity))
+      throw new BadRequestException('Target quantity must be a whole number');
 
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({
         where: { id: finishedGoodId },
-        include: { bomAsFinishedGood: { include: { component: true } } }
+        include: { bomAsFinishedGood: { include: { component: true } } },
       });
 
       if (!product) throw new BadRequestException('Product not found');
-      if (product.bomAsFinishedGood.length === 0) throw new BadRequestException('No Bill of Materials found for this product');
+      if (product.bomAsFinishedGood.length === 0)
+        throw new BadRequestException(
+          'No Bill of Materials found for this product',
+        );
 
       // 1. Verify enough stock exists for all raw materials
       let totalRawMaterialCost = 0;
@@ -27,17 +32,21 @@ export class ProductionService {
         const component = bomItem.component;
 
         if (!Number.isInteger(requiredQty)) {
-          throw new BadRequestException(`Required quantity for ${component.name} must resolve to a whole stock unit. Required: ${requiredQty}`);
+          throw new BadRequestException(
+            `Required quantity for ${component.name} must resolve to a whole stock unit. Required: ${requiredQty}`,
+          );
         }
 
         if (component.stock < requiredQty) {
-          throw new BadRequestException(`Insufficient stock of ${component.name}. Required: ${requiredQty}, Available: ${component.stock}`);
+          throw new BadRequestException(
+            `Insufficient stock of ${component.name}. Required: ${requiredQty}, Available: ${component.stock}`,
+          );
         }
 
         // Deduct raw material stock
         await tx.product.update({
           where: { id: component.id },
-          data: { stock: { decrement: requiredQty } }
+          data: { stock: { decrement: requiredQty } },
         });
 
         // Log StockMovement (outbound consumption)
@@ -46,19 +55,20 @@ export class ProductionService {
             productId: component.id,
             quantity: -requiredQty,
             movementType: 'MANUFACTURING_CONSUMPTION',
-            unitCost: component.costPrice // Using current WAC of this raw material
-          }
+            unitCost: component.costPrice, // Using current WAC of this raw material
+          },
         });
 
         // Add to total component cost calculation
-        totalRawMaterialCost += (requiredQty * component.costPrice);
+        totalRawMaterialCost += requiredQty * component.costPrice;
       }
 
       // 2. Calculate Final COGS
       const baseLaborCost = product.laborCostPerUnit * targetQuantity;
       const baseOverheadCost = product.overheadCostPerUnit * targetQuantity;
-      
-      const totalBatchCost = totalRawMaterialCost + baseLaborCost + baseOverheadCost;
+
+      const totalBatchCost =
+        totalRawMaterialCost + baseLaborCost + baseOverheadCost;
       const calculatedUnitCost = totalBatchCost / targetQuantity;
 
       // 3. Create Finished Goods Batch
@@ -70,7 +80,7 @@ export class ProductionService {
           quantity: targetQuantity,
           unitCost: calculatedUnitCost,
           mfgDate: new Date(),
-        }
+        },
       });
 
       // 4. Log StockMovement (inbound finished goods)
@@ -80,21 +90,23 @@ export class ProductionService {
           quantity: targetQuantity,
           movementType: 'MANUFACTURING_OUTPUT',
           unitCost: calculatedUnitCost,
-        }
+        },
       });
 
       // 5. Update Finished Good Stock and globally recalculate WAC
       const currentQty = product.stock;
       const currentCost = product.costPrice;
       const newStock = currentQty + targetQuantity;
-      const newWAC = ((currentQty * currentCost) + (targetQuantity * calculatedUnitCost)) / newStock;
+      const newWAC =
+        (currentQty * currentCost + targetQuantity * calculatedUnitCost) /
+        newStock;
 
       const updatedProduct = await tx.product.update({
         where: { id: finishedGoodId },
         data: {
           stock: newStock,
-          costPrice: newWAC
-        }
+          costPrice: newWAC,
+        },
       });
 
       return {
@@ -103,7 +115,7 @@ export class ProductionService {
         manufacturedQuantity: targetQuantity,
         totalCalculatedCOGS: totalBatchCost,
         unitCost: calculatedUnitCost,
-        product: updatedProduct
+        product: updatedProduct,
       };
     });
   }
@@ -111,11 +123,15 @@ export class ProductionService {
   async getProductBOM(productId: number) {
     return this.prisma.billOfMaterial.findMany({
       where: { finishedGoodId: productId },
-      include: { component: true }
+      include: { component: true },
     });
   }
 
-  async setBOMItem(finishedGoodId: number, componentId: number, quantityRequired: number) {
+  async setBOMItem(
+    finishedGoodId: number,
+    componentId: number,
+    quantityRequired: number,
+  ) {
     if (!finishedGoodId || !componentId) {
       throw new BadRequestException('Finished good and component are required');
     }
@@ -139,7 +155,7 @@ export class ProductionService {
         finishedGoodId_componentId: {
           finishedGoodId,
           componentId,
-        }
+        },
       },
       create: {
         finishedGoodId,
@@ -149,7 +165,7 @@ export class ProductionService {
       update: {
         quantityRequired,
       },
-      include: { component: true }
+      include: { component: true },
     });
 
     return { success: true, bomItem };

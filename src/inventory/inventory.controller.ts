@@ -1,4 +1,14 @@
-import { Controller, Post, Body, Get, Put, Patch, Param, Query, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Put,
+  Patch,
+  Param,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { Roles } from '../auth/roles.decorator';
 
@@ -68,13 +78,18 @@ export class InventoryController {
 
   @Patch('warehouses/:id/status')
   @Roles('manager', 'stock_manager')
-  async updateWarehouseStatus(@Param('id') id: string, @Body('status') status: string) {
+  async updateWarehouseStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
     return this.inventoryService.updateWarehouseStatus(Number(id), status);
   }
 
   @Get('warehouse-stock')
   async getWarehouseStock(@Query('warehouseId') warehouseId?: string) {
-    return this.inventoryService.getWarehouseStock(warehouseId ? Number(warehouseId) : undefined);
+    return this.inventoryService.getWarehouseStock(
+      warehouseId ? Number(warehouseId) : undefined,
+    );
   }
 
   @Get('warehouses/:id/stock')
@@ -89,7 +104,17 @@ export class InventoryController {
     @Param('productId') productId: string,
     @Body('minStock') minStock: number,
   ) {
-    return this.inventoryService.setWarehouseMinStock(Number(warehouseId), Number(productId), Number(minStock));
+    return this.inventoryService.setWarehouseMinStock(
+      Number(warehouseId),
+      Number(productId),
+      Number(minStock),
+    );
+  }
+
+  @Post('warehouse-stock/import')
+  @Roles('manager', 'stock_manager')
+  async importWarehouseStock(@Req() req: any, @Body() data: any) {
+    return this.inventoryService.importWarehouseStock(data, req.user);
   }
 
   @Get('transfers')
@@ -139,7 +164,10 @@ export class InventoryController {
 
   @Patch('suppliers/:id/status')
   @Roles('manager', 'stock_manager')
-  async updateSupplierStatus(@Param('id') id: string, @Body('status') status: string) {
+  async updateSupplierStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
     return this.inventoryService.updateSupplierStatus(Number(id), status);
   }
 }

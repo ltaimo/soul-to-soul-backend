@@ -8,140 +8,141 @@ datasource db {
 }
 
 model Supplier {
-  id        Int       @id @default(autoincrement())
-  name      String
-  category  String
-  status    String    @default("Active")
-  leadTime  String
-  
+  id       Int    @id @default(autoincrement())
+  name     String
+  category String
+  status   String @default("Active")
+  leadTime String
+
   products  Product[]
   purchases Purchase[]
 }
 
 model Warehouse {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  name        String
-  type        String   @default("Warehouse")
-  address     String?
-  notes       String?
-  status      String   @default("Active")
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  type      String   @default("Warehouse")
+  address   String?
+  notes     String?
+  status    String   @default("Active")
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  stocks                WarehouseStock[]
-  inventoryBatches      InventoryBatch[]
-  purchases             Purchase[]
-  sales                 Sale[]
-  movements             StockMovement[] @relation("MovementWarehouse")
-  sourceMovements       StockMovement[] @relation("MovementSourceWarehouse")
-  destinationMovements  StockMovement[] @relation("MovementDestinationWarehouse")
-  sourceTransfers       StockTransfer[] @relation("TransferSourceWarehouse")
-  destinationTransfers  StockTransfer[] @relation("TransferDestinationWarehouse")
+  stocks               WarehouseStock[]
+  inventoryBatches     InventoryBatch[]
+  purchases            Purchase[]
+  sales                Sale[]
+  movements            StockMovement[]     @relation("MovementWarehouse")
+  sourceMovements      StockMovement[]     @relation("MovementSourceWarehouse")
+  destinationMovements StockMovement[]     @relation("MovementDestinationWarehouse")
+  sourceTransfers      StockTransfer[]     @relation("TransferSourceWarehouse")
+  destinationTransfers StockTransfer[]     @relation("TransferDestinationWarehouse")
+  commercialPartners   CommercialPartner[]
 
   @@index([status])
   @@index([type])
 }
 
 model Product {
-  id           Int       @id @default(autoincrement())
-  sku          String    @unique
-  name         String
-  category     String
-  type         String
-  costPrice    Float
-  sellingPrice Float
-  laborCostPerUnit   Float @default(0.0)
-  overheadCostPerUnit Float @default(0.0)
-  stock        Int       @default(0)
-  status       String    @default("Active")
-  
+  id                  Int    @id @default(autoincrement())
+  sku                 String @unique
+  name                String
+  category            String
+  type                String
+  costPrice           Float
+  sellingPrice        Float
+  laborCostPerUnit    Float  @default(0.0)
+  overheadCostPerUnit Float  @default(0.0)
+  stock               Int    @default(0)
+  status              String @default("Active")
+
   // New Product Management Fields
-  brand        String?
-  description  String?
-  barcode      String?
-  unit         String    @default("pcs")
-  minStock     Int       @default(0)
-  loyaltyPointsEarned Int @default(0)
-  redemptionPointsCost Int @default(0)
+  brand                String?
+  description          String?
+  barcode              String?
+  unit                 String  @default("pcs")
+  minStock             Int     @default(0)
+  loyaltyPointsEarned  Int     @default(0)
+  redemptionPointsCost Int     @default(0)
 
-  supplierId   Int?
-  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  supplierId Int?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
 
-  stockMovements StockMovement[]
-  purchases      PurchaseItem[]
+  stockMovements   StockMovement[]
+  purchases        PurchaseItem[]
   inventoryBatches InventoryBatch[]
-  warehouseStocks WarehouseStock[]
+  warehouseStocks  WarehouseStock[]
   transferItems    StockTransferItem[]
 
   // BOM Relationships
   bomAsFinishedGood BillOfMaterial[] @relation("BOM_FinishedGood")
   bomAsComponent    BillOfMaterial[] @relation("BOM_Component")
-  
-  saleItems         SaleItem[]
+
+  saleItems SaleItem[]
 }
 
 model Purchase {
-  id          Int      @id @default(autoincrement())
-  supplierId  Int
-  warehouseId Int?
+  id            Int      @id @default(autoincrement())
+  supplierId    Int
+  warehouseId   Int?
   warehouseName String?
-  date        DateTime @default(now())
-  status      String   @default("Received")
-  totalValue  Float
-  
-  supplier    Supplier @relation(fields: [supplierId], references: [id])
-  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
-  items       PurchaseItem[]
+  date          DateTime @default(now())
+  status        String   @default("Received")
+  totalValue    Float
+
+  supplier  Supplier       @relation(fields: [supplierId], references: [id])
+  warehouse Warehouse?     @relation(fields: [warehouseId], references: [id])
+  items     PurchaseItem[]
 }
 
 model PurchaseItem {
-  id           Int      @id @default(autoincrement())
-  purchaseId   Int
-  productId    Int
-  quantity     Int
-  unitCost     Float
+  id         Int   @id @default(autoincrement())
+  purchaseId Int
+  productId  Int
+  quantity   Int
+  unitCost   Float
 
-  purchase     Purchase @relation(fields: [purchaseId], references: [id])
-  product      Product  @relation(fields: [productId], references: [id])
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
 }
 
 model InventoryBatch {
-  id           Int      @id @default(autoincrement())
-  productId    Int
-  warehouseId  Int?
-  batchNumber  String
-  quantity     Int
-  unitCost     Float
-  mfgDate      DateTime?
-  expiryDate   DateTime?
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  warehouseId Int?
+  batchNumber String
+  quantity    Int
+  unitCost    Float
+  mfgDate     DateTime?
+  expiryDate  DateTime?
 
-  product      Product  @relation(fields: [productId], references: [id])
-  warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
+  product   Product    @relation(fields: [productId], references: [id])
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
 }
 
 model StockMovement {
-  id           Int      @id @default(autoincrement())
-  productId    Int
-  warehouseId  Int?
-  sourceWarehouseId Int?
+  id                     Int      @id @default(autoincrement())
+  productId              Int
+  warehouseId            Int?
+  sourceWarehouseId      Int?
   destinationWarehouseId Int?
-  transferId   Int?
-  responsibleId Int?
-  responsibleName String?
-  quantity     Int      // Positive for receive, negative for deduction
-  movementType String   // "PO_RECEIVE", "SALE", "ADJUSTMENT", "INITIAL_ADJUSTMENT"
-  status       String   @default("Posted")
-  unitCost     Float
-  date         DateTime @default(now())
-  reference    String?  // Audit/Note reference
+  transferId             Int?
+  responsibleId          Int?
+  responsibleName        String?
+  quantity               Int // Positive for receive, negative for deduction
+  movementType           String // "PO_RECEIVE", "SALE", "ADJUSTMENT", "INITIAL_ADJUSTMENT"
+  status                 String   @default("Posted")
+  unitCost               Float
+  date                   DateTime @default(now())
+  reference              String? // Audit/Note reference
 
-  product      Product  @relation(fields: [productId], references: [id])
-  warehouse    Warehouse? @relation("MovementWarehouse", fields: [warehouseId], references: [id])
-  sourceWarehouse Warehouse? @relation("MovementSourceWarehouse", fields: [sourceWarehouseId], references: [id])
-  destinationWarehouse Warehouse? @relation("MovementDestinationWarehouse", fields: [destinationWarehouseId], references: [id])
-  transfer     StockTransfer? @relation(fields: [transferId], references: [id])
+  product              Product        @relation(fields: [productId], references: [id])
+  warehouse            Warehouse?     @relation("MovementWarehouse", fields: [warehouseId], references: [id])
+  sourceWarehouse      Warehouse?     @relation("MovementSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  destinationWarehouse Warehouse?     @relation("MovementDestinationWarehouse", fields: [destinationWarehouseId], references: [id])
+  transfer             StockTransfer? @relation(fields: [transferId], references: [id])
 
   @@index([warehouseId])
   @@index([sourceWarehouseId])
@@ -158,19 +159,19 @@ model WarehouseStock {
   minStock    Int      @default(0)
   updatedAt   DateTime @updatedAt
 
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-  product     Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
 
   @@unique([warehouseId, productId])
   @@index([productId])
 }
 
 model StockTransfer {
-  id                     Int      @id @default(autoincrement())
-  transferNumber         String   @unique
+  id                     Int       @id @default(autoincrement())
+  transferNumber         String    @unique
   sourceWarehouseId      Int
   destinationWarehouseId Int
-  status                 String   @default("In Transit")
+  status                 String    @default("In Transit")
   notes                  String?
   requestedById          Int?
   requestedByName        String?
@@ -178,13 +179,13 @@ model StockTransfer {
   confirmedByName        String?
   shippedAt              DateTime?
   receivedAt             DateTime?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  sourceWarehouse        Warehouse @relation("TransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
-  destinationWarehouse   Warehouse @relation("TransferDestinationWarehouse", fields: [destinationWarehouseId], references: [id])
-  items                  StockTransferItem[]
-  movements              StockMovement[]
+  sourceWarehouse      Warehouse           @relation("TransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  destinationWarehouse Warehouse           @relation("TransferDestinationWarehouse", fields: [destinationWarehouseId], references: [id])
+  items                StockTransferItem[]
+  movements            StockMovement[]
 
   @@index([sourceWarehouseId])
   @@index([destinationWarehouseId])
@@ -192,26 +193,26 @@ model StockTransfer {
 }
 
 model StockTransferItem {
-  id          Int      @id @default(autoincrement())
-  transferId  Int
-  productId   Int
-  quantity    Int
-  unitCost    Float    @default(0)
+  id         Int   @id @default(autoincrement())
+  transferId Int
+  productId  Int
+  quantity   Int
+  unitCost   Float @default(0)
 
-  transfer    StockTransfer @relation(fields: [transferId], references: [id])
-  product     Product       @relation(fields: [productId], references: [id])
+  transfer StockTransfer @relation(fields: [transferId], references: [id])
+  product  Product       @relation(fields: [productId], references: [id])
 
   @@index([productId])
 }
 
 model BillOfMaterial {
-  id               Int      @id @default(autoincrement())
+  id               Int   @id @default(autoincrement())
   finishedGoodId   Int
   componentId      Int
   quantityRequired Float
-  
-  finishedGood     Product  @relation("BOM_FinishedGood", fields: [finishedGoodId], references: [id])
-  component        Product  @relation("BOM_Component", fields: [componentId], references: [id])
+
+  finishedGood Product @relation("BOM_FinishedGood", fields: [finishedGoodId], references: [id])
+  component    Product @relation("BOM_Component", fields: [componentId], references: [id])
 
   @@unique([finishedGoodId, componentId])
 }
@@ -230,67 +231,113 @@ model Customer {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  sales           Sale[]
+  sales Sale[]
 
   @@index([email])
   @@index([phone])
   @@index([customerCode])
 }
 
-model Sale {
-  id           Int        @id @default(autoincrement())
-  customerId   Int?
-  warehouseId  Int?
-  warehouseName String?
-  customerName String?
-  customerEmail String?
-  sellerId     Int?
-  sellerName   String?
-  channel      String     @default("Store")
-  paymentMethod String    @default("Cash")
-  amountPaid   Float      @default(0)
-  changeGiven  Float      @default(0)
-  pointsEarned Int        @default(0)
-  pointsRedeemed Int      @default(0)
-  date         DateTime   @default(now())
-  totalRevenue Float
-  totalCogs    Float
+model CommercialPartner {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  type               String   @default("Seller")
+  warehouseId        Int?
+  phone              String?
+  email              String?
+  commissionRate     Float    @default(0)
+  agreementType      String   @default("Direct Sale")
+  pricePolicy        String   @default("Standard")
+  priceAdjustment    Float    @default(0)
+  paymentTerms       String?
+  settlementCycle    String   @default("On Sale")
+  creditLimit        Float    @default(0)
+  defaultSaleChannel String   @default("Store")
+  trackingEnabled    Boolean  @default(false)
+  notes              String?
+  status             String   @default("Active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  items        SaleItem[]
-  customer     Customer?  @relation(fields: [customerId], references: [id])
-  warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
+  sales     Sale[]
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([type])
+  @@index([status])
+  @@index([phone])
+  @@index([agreementType])
+  @@index([warehouseId])
+}
+
+model Sale {
+  id                  Int      @id @default(autoincrement())
+  customerId          Int?
+  warehouseId         Int?
+  commercialPartnerId Int?
+  warehouseName       String?
+  customerName        String?
+  customerEmail       String?
+  sellerId            Int?
+  sellerName          String?
+  sellerType          String?
+  commissionRate      Float    @default(0)
+  commissionAmount    Float    @default(0)
+  channel             String   @default("Store")
+  orderReference      String?
+  fulfillmentStatus   String   @default("Delivered")
+  paymentMethod       String   @default("Cash")
+  amountPaid          Float    @default(0)
+  changeGiven         Float    @default(0)
+  pointsEarned        Int      @default(0)
+  pointsRedeemed      Int      @default(0)
+  date                DateTime @default(now())
+  totalRevenue        Float
+  totalCogs           Float
+
+  items             SaleItem[]
+  customer          Customer?          @relation(fields: [customerId], references: [id])
+  warehouse         Warehouse?         @relation(fields: [warehouseId], references: [id])
+  commercialPartner CommercialPartner? @relation(fields: [commercialPartnerId], references: [id])
 }
 
 model SaleItem {
-  id               Int      @id @default(autoincrement())
-  saleId           Int
-  productId        Int
-  quantity         Int
-  unitSellingPrice Float
-  unitCogs         Float    // Locked COGS at time of sale
-  loyaltyPointsEarned Int @default(0)
-  redemptionPointsCost Int @default(0)
+  id                   Int   @id @default(autoincrement())
+  saleId               Int
+  productId            Int
+  quantity             Int
+  unitSellingPrice     Float
+  unitCogs             Float // Locked COGS at time of sale
+  loyaltyPointsEarned  Int   @default(0)
+  redemptionPointsCost Int   @default(0)
 
-  sale             Sale     @relation(fields: [saleId], references: [id])
-  product          Product  @relation(fields: [productId], references: [id])
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 }
 
 model SystemSetting {
-  id                Int      @id @default(1)
-  companyName       String   @default("Soul2Soul")
-  companyLogo       String?
-  defaultCurrency   String   @default("MZN")
-  currencySymbol    String   @default("MT")
-  decimalFormatting Int      @default(2)
-  hrPaymentTypes    String   @default("Salary,Rent,Advance,Bonus,Transport,Utilities,Commission,Other")
-  paymentMethods    String   @default("Cash,M-Pesa,E-Mola,Card,Bank Transfer")
-  warehouseTypes    String   @default("Warehouse,Shop,Storage,Transit")
-  productCategories String   @default("Skincare,Haircare,Beard Care,Raw Material,Packaging")
-  productTypes      String   @default("Finished Good,Raw Material,Packaging")
-  productUnits      String   @default("pcs,kg,g,l,ml,box")
-  attendanceStatuses String  @default("Present,Absent,Late,Half Day,Leave")
-  payFrequencies    String   @default("Monthly,Weekly,Daily,Hourly")
-  updatedAt         DateTime @updatedAt
+  id                 Int      @id @default(1)
+  companyName        String   @default("Soul2Soul")
+  companyLogo        String?
+  companyPhone       String?
+  companyWhatsApp    String?
+  companyEmail       String?
+  companyAddress     String?
+  companyWebsite     String?
+  instagramUrl       String?
+  facebookUrl        String?
+  tiktokUrl          String?
+  defaultCurrency    String   @default("MZN")
+  currencySymbol     String   @default("MT")
+  decimalFormatting  Int      @default(2)
+  hrPaymentTypes     String   @default("Salary,Rent,Advance,Bonus,Transport,Utilities,Commission,Other")
+  paymentMethods     String   @default("Cash,M-Pesa,E-Mola,Card,Bank Transfer")
+  warehouseTypes     String   @default("Warehouse,Shop,Storage,Transit")
+  productCategories  String   @default("Skincare,Haircare,Beard Care,Raw Material,Packaging")
+  productTypes       String   @default("Finished Good,Raw Material,Packaging")
+  productUnits       String   @default("pcs,kg,g,l,ml,box")
+  attendanceStatuses String   @default("Present,Absent,Late,Half Day,Leave")
+  payFrequencies     String   @default("Monthly,Weekly,Daily,Hourly")
+  updatedAt          DateTime @updatedAt
 }
 
 model User {
@@ -298,32 +345,56 @@ model User {
   fullName     String
   email        String   @unique
   passwordHash String
-  role         String   @default("staff")   // admin, manager, staff, viewer
-  status       String   @default("active")  // active, inactive
+  role         String   @default("staff") // admin, manager, staff, viewer
+  status       String   @default("active") // active, inactive
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   createdBy    Int?
   updatedBy    Int?
 }
 
-model Employee {
-  id              Int      @id @default(autoincrement())
-  fullName        String
-  phone           String?
-  email           String?
-  role            String?
-  department      String?
-  salary          Float    @default(0)
-  payFrequency    String   @default("Monthly")
-  startDate       DateTime @default(now())
-  emergencyContact String?
-  notes           String?
-  status          String   @default("Active")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  userName   String?
+  userEmail  String?
+  userRole   String?
+  action     String
+  entityType String?
+  entityId   String?
+  method     String
+  path       String
+  ipAddress  String?
+  userAgent  String?
+  machine    String?
+  metadata   String?
+  statusCode Int?
+  createdAt  DateTime @default(now())
 
-  payments        HrPayment[]
-  attendance      AttendanceRecord[]
+  @@index([userId])
+  @@index([entityType])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Employee {
+  id               Int      @id @default(autoincrement())
+  fullName         String
+  phone            String?
+  email            String?
+  role             String?
+  department       String?
+  salary           Float    @default(0)
+  payFrequency     String   @default("Monthly")
+  startDate        DateTime @default(now())
+  emergencyContact String?
+  notes            String?
+  status           String   @default("Active")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  payments   HrPayment[]
+  attendance AttendanceRecord[]
 
   @@index([phone])
   @@index([status])
@@ -335,7 +406,11 @@ model HrPayment {
   type        String
   description String
   amount      Float
+  periodicity String    @default("One-time")
+  periodStart DateTime?
+  periodEnd   DateTime?
   dueDate     DateTime?
+  nextDueDate DateTime?
   paidDate    DateTime?
   method      String?
   status      String    @default("Pending")
@@ -343,25 +418,27 @@ model HrPayment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  employee    Employee? @relation(fields: [employeeId], references: [id])
+  employee Employee? @relation(fields: [employeeId], references: [id])
 
   @@index([type])
+  @@index([periodicity])
   @@index([status])
   @@index([dueDate])
+  @@index([nextDueDate])
 }
 
 model AttendanceRecord {
-  id          Int      @id @default(autoincrement())
-  employeeId  Int
-  date        DateTime
-  status      String   @default("Present")
-  checkIn     String?
-  checkOut    String?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  date       DateTime
+  status     String   @default("Present")
+  checkIn    String?
+  checkOut   String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  employee    Employee @relation(fields: [employeeId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
 
   @@unique([employeeId, date])
   @@index([date])

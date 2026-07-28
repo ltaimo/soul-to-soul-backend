@@ -28,7 +28,11 @@ export class CustomersService {
 
       return tx.customer.update({
         where: { id: created.id },
-        data: { customerCode: data.customerCode?.trim() || `CUST-${String(created.id).padStart(5, '0')}` },
+        data: {
+          customerCode:
+            data.customerCode?.trim() ||
+            `CUST-${String(created.id).padStart(5, '0')}`,
+        },
       });
     });
 

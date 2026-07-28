@@ -1,0 +1,9 @@
+ALTER TABLE "SystemSetting"
+  ADD COLUMN IF NOT EXISTS "companyPhone" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyWhatsApp" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyEmail" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyAddress" TEXT,
+  ADD COLUMN IF NOT EXISTS "companyWebsite" TEXT,
+  ADD COLUMN IF NOT EXISTS "instagramUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "facebookUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "tiktokUrl" TEXT;

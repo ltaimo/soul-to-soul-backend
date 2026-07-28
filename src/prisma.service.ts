@@ -9,17 +9,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit() {
     await this.$connect();
-    this.ensureProductionSchema().catch((error) => {
-      console.warn(`Production schema bootstrap skipped: ${error?.message || error}`);
+    await this.ensureProductionSchema().catch((error) => {
+      console.warn(
+        `Production schema bootstrap skipped: ${error?.message || error}`,
+      );
     });
   }
 
   private async ensureProductionSchema() {
     const databaseUrl = process.env.DATABASE_URL || '';
-    if (!databaseUrl.startsWith('postgresql://') && !databaseUrl.startsWith('postgres://')) {
-      return;
-    }
-    if (databaseUrl.includes('pgbouncer=true')) {
+    if (
+      !databaseUrl.startsWith('postgresql://') &&
+      !databaseUrl.startsWith('postgres://')
+    ) {
       return;
     }
 
@@ -34,7 +36,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   }
 
   private async runProductionUpgrade() {
-    const upgradePath = join(process.cwd(), 'prisma', 'manual-production-upgrade-20260727.sql');
+    const upgradePath = join(
+      process.cwd(),
+      'prisma',
+      'manual-production-upgrade-20260727.sql',
+    );
     if (!existsSync(upgradePath)) {
       return;
     }

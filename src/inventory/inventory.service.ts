@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { randomBytes } from 'crypto';
 
@@ -70,13 +74,20 @@ export class InventoryService {
   private async getWarehouse(tx: any, warehouseId?: number) {
     if (!warehouseId) return this.ensureDefaultWarehouse(tx);
 
-    const warehouse = await tx.warehouse.findUnique({ where: { id: warehouseId } });
+    const warehouse = await tx.warehouse.findUnique({
+      where: { id: warehouseId },
+    });
     if (!warehouse) throw new BadRequestException('Warehouse not found');
-    if (warehouse.status === 'Inactive') throw new BadRequestException('Warehouse is inactive');
+    if (warehouse.status === 'Inactive')
+      throw new BadRequestException('Warehouse is inactive');
     return warehouse;
   }
 
-  private async ensureWarehouseStock(tx: any, warehouseId: number, product: any) {
+  private async ensureWarehouseStock(
+    tx: any,
+    warehouseId: number,
+    product: any,
+  ) {
     return tx.warehouseStock.upsert({
       where: { warehouseId_productId: { warehouseId, productId: product.id } },
       update: {},
@@ -91,20 +102,24 @@ export class InventoryService {
 
   private async seedAllWarehouseStocks(tx: any = this.prisma) {
     const warehouses = await tx.warehouse.findMany({ select: { id: true } });
-    const products = await tx.product.findMany({ select: { id: true, minStock: true } });
+    const products = await tx.product.findMany({
+      select: { id: true, minStock: true },
+    });
     const existing = await tx.warehouseStock.findMany({
       select: { warehouseId: true, productId: true },
     });
-    const existingKeys = new Set(existing.map((row) => `${row.warehouseId}:${row.productId}`));
+    const existingKeys = new Set(
+      existing.map((row) => `${row.warehouseId}:${row.productId}`),
+    );
 
     const missingRows = warehouses.flatMap((warehouse) =>
       products
         .filter((product) => !existingKeys.has(`${warehouse.id}:${product.id}`))
         .map((product) => ({
-            warehouseId: warehouse.id,
-            productId: product.id,
-            quantity: 0,
-            minStock: product.minStock || 0,
+          warehouseId: warehouse.id,
+          productId: product.id,
+          quantity: 0,
+          minStock: product.minStock || 0,
         })),
     );
 
@@ -116,7 +131,12 @@ export class InventoryService {
     }
   }
 
-  private async applyWarehouseDelta(tx: any, warehouseId: number, product: any, delta: number) {
+  private async applyWarehouseDelta(
+    tx: any,
+    warehouseId: number,
+    product: any,
+    delta: number,
+  ) {
     const stock = await this.ensureWarehouseStock(tx, warehouseId, product);
     const nextQuantity = stock.quantity + delta;
 
@@ -144,7 +164,8 @@ export class InventoryService {
   }
 
   async createWarehouse(data: any) {
-    if (!data.name?.trim()) throw new BadRequestException('Warehouse name is required');
+    if (!data.name?.trim())
+      throw new BadRequestException('Warehouse name is required');
 
     const code = (data.code || data.name)
       .trim()
@@ -165,7 +186,9 @@ export class InventoryService {
       },
     });
 
-    const products = await this.prisma.product.findMany({ select: { id: true, minStock: true } });
+    const products = await this.prisma.product.findMany({
+      select: { id: true, minStock: true },
+    });
     for (const product of products) {
       await this.prisma.warehouseStock.create({
         data: {
@@ -181,7 +204,8 @@ export class InventoryService {
   }
 
   async updateWarehouse(id: number, data: any) {
-    if (!data.name?.trim()) throw new BadRequestException('Warehouse name is required');
+    if (!data.name?.trim())
+      throw new BadRequestException('Warehouse name is required');
 
     const warehouse = await this.prisma.warehouse.update({
       where: { id },
@@ -198,7 +222,8 @@ export class InventoryService {
   }
 
   async updateWarehouseStatus(id: number, status: string) {
-    if (!['Active', 'Inactive'].includes(status)) throw new BadRequestException('Invalid warehouse status');
+    if (!['Active', 'Inactive'].includes(status))
+      throw new BadRequestException('Invalid warehouse status');
 
     const warehouse = await this.prisma.warehouse.update({
       where: { id },
@@ -225,14 +250,26 @@ export class InventoryService {
       ...row,
       value: row.quantity * row.product.costPrice,
       differenceFromMinimum: row.quantity - row.minStock,
-      stockStatus: row.quantity <= 0 ? 'Out of Stock' : row.quantity <= row.minStock ? 'Low Stock' : 'Healthy',
+      stockStatus:
+        row.quantity <= 0
+          ? 'Out of Stock'
+          : row.quantity <= row.minStock
+            ? 'Low Stock'
+            : 'Healthy',
     }));
   }
 
-  async setWarehouseMinStock(warehouseId: number, productId: number, minStock: number) {
-    if (minStock < 0) throw new BadRequestException('Minimum stock cannot be negative');
+  async setWarehouseMinStock(
+    warehouseId: number,
+    productId: number,
+    minStock: number,
+  ) {
+    if (minStock < 0)
+      throw new BadRequestException('Minimum stock cannot be negative');
 
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
     if (!product) throw new BadRequestException('Product not found');
     await this.getWarehouse(this.prisma, warehouseId);
 
@@ -245,6 +282,169 @@ export class InventoryService {
     return { success: true, stock };
   }
 
+  async importWarehouseStock(data: any, user?: Actor) {
+    const warehouseId = Number(data.warehouseId);
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    const mode = data.mode === 'add' ? 'add' : 'set';
+
+    if (!warehouseId) throw new BadRequestException('Warehouse is required');
+    if (!rows.length)
+      throw new BadRequestException('Import must contain at least one row');
+
+    return this.prisma.$transaction(async (tx) => {
+      const warehouse = await this.getWarehouse(tx, warehouseId);
+      const summary = {
+        createdProducts: 0,
+        updatedProducts: 0,
+        adjustedRows: 0,
+        skippedRows: 0,
+        totalDelta: 0,
+      };
+
+      await this.seedAllWarehouseStocks(tx);
+
+      for (const [index, row] of rows.entries()) {
+        const sku = String(row.sku || row.SKU || '').trim();
+        const name = String(
+          row.name || row.productName || row['Product Name'] || '',
+        ).trim();
+        const quantity = Number(
+          row.quantity ?? row.Quantity ?? row.stock ?? row.Stock ?? 0,
+        );
+        const minStock = Math.max(
+          0,
+          Number(row.minStock ?? row['Min Stock'] ?? row.Minimum ?? 0) || 0,
+        );
+        const rawCostPrice = row.costPrice ?? row['Unit Cost'] ?? row.Cost;
+        const rawSellingPrice =
+          row.sellingPrice ?? row['Selling Price'] ?? row.Price;
+        const costPrice = Number(rawCostPrice ?? 0) || 0;
+        const sellingPrice = Number(rawSellingPrice ?? 0) || 0;
+
+        if (!sku || !name || !Number.isInteger(quantity) || quantity < 0) {
+          summary.skippedRows += 1;
+          continue;
+        }
+
+        let product = await tx.product.findUnique({ where: { sku } });
+        if (!product) {
+          product = await tx.product.create({
+            data: {
+              sku,
+              name,
+              category: row.category || row.Category || 'General',
+              type: row.type || row.Type || 'Finished Good',
+              unit: row.unit || row.Unit || 'pcs',
+              costPrice,
+              sellingPrice,
+              minStock,
+              stock: 0,
+              status: row.status || row.Status || 'Active',
+            },
+          });
+
+          const warehouses = await tx.warehouse.findMany({
+            select: { id: true },
+          });
+          for (const wh of warehouses) {
+            await tx.warehouseStock.upsert({
+              where: {
+                warehouseId_productId: {
+                  warehouseId: wh.id,
+                  productId: product.id,
+                },
+              },
+              update: {},
+              create: {
+                warehouseId: wh.id,
+                productId: product.id,
+                quantity: 0,
+                minStock,
+              },
+            });
+          }
+          summary.createdProducts += 1;
+        } else {
+          const patch: any = {
+            name,
+            category: row.category || row.Category || product.category,
+            type: row.type || row.Type || product.type,
+            unit: row.unit || row.Unit || product.unit,
+            minStock,
+          };
+          if (costPrice > 0) patch.costPrice = costPrice;
+          if (rawSellingPrice !== undefined && rawSellingPrice !== '')
+            patch.sellingPrice = sellingPrice;
+          product = await tx.product.update({
+            where: { id: product.id },
+            data: patch,
+          });
+          summary.updatedProducts += 1;
+        }
+
+        const currentStock = await this.ensureWarehouseStock(
+          tx,
+          warehouse.id,
+          product,
+        );
+        const delta =
+          mode === 'add' ? quantity : quantity - currentStock.quantity;
+        if (delta === 0) {
+          await tx.warehouseStock.update({
+            where: {
+              warehouseId_productId: {
+                warehouseId: warehouse.id,
+                productId: product.id,
+              },
+            },
+            data: { minStock },
+          });
+          continue;
+        }
+
+        if (product.stock + delta < 0) {
+          throw new BadRequestException(
+            `Row ${index + 1} would make consolidated stock negative for ${product.name}`,
+          );
+        }
+
+        await this.applyWarehouseDelta(tx, warehouse.id, product, delta);
+        await tx.warehouseStock.update({
+          where: {
+            warehouseId_productId: {
+              warehouseId: warehouse.id,
+              productId: product.id,
+            },
+          },
+          data: { minStock },
+        });
+
+        await tx.product.update({
+          where: { id: product.id },
+          data: { stock: { increment: delta } },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            productId: product.id,
+            warehouseId: warehouse.id,
+            quantity: delta,
+            movementType: mode === 'add' ? 'IMPORT_ADD' : 'IMPORT_SET',
+            unitCost: product.costPrice,
+            responsibleId: user?.id || null,
+            responsibleName: this.actorName(user),
+            reference: `Stock import into ${warehouse.name}`,
+          },
+        });
+
+        summary.adjustedRows += 1;
+        summary.totalDelta += delta;
+      }
+
+      return { success: true, summary, warehouse };
+    });
+  }
+
   async receiveGoods(
     productId: number,
     quantity: number,
@@ -253,9 +453,12 @@ export class InventoryService {
     warehouseId?: number,
     user?: Actor,
   ) {
-    if (quantity <= 0) throw new BadRequestException('Quantity must be positive');
-    if (!Number.isInteger(quantity)) throw new BadRequestException('Quantity must be a whole number');
-    if (landedCost <= 0) throw new BadRequestException('Landed cost must be positive');
+    if (quantity <= 0)
+      throw new BadRequestException('Quantity must be positive');
+    if (!Number.isInteger(quantity))
+      throw new BadRequestException('Quantity must be a whole number');
+    if (landedCost <= 0)
+      throw new BadRequestException('Landed cost must be positive');
 
     return this.prisma.$transaction(async (tx) => {
       const warehouse = await this.getWarehouse(tx, warehouseId);
@@ -306,20 +509,37 @@ export class InventoryService {
       const currentQty = product.stock;
       const currentCost = product.costPrice;
       const newStock = currentQty + quantity;
-      const newWAC = ((currentQty * currentCost) + (quantity * landedCost)) / newStock;
+      const newWAC =
+        (currentQty * currentCost + quantity * landedCost) / newStock;
 
       const updatedProduct = await tx.product.update({
         where: { id: productId },
         data: { stock: newStock, costPrice: newWAC },
       });
 
-      return { success: true, purchase, product: updatedProduct, batchNumber, warehouse };
+      return {
+        success: true,
+        purchase,
+        product: updatedProduct,
+        batchNumber,
+        warehouse,
+      };
     });
   }
 
-  async adjustStock(productId: number, quantity: number, reference?: string, warehouseId?: number, user?: Actor) {
-    if (!quantity || quantity === 0) throw new BadRequestException('Adjustment quantity cannot be zero');
-    if (!Number.isInteger(quantity)) throw new BadRequestException('Adjustment quantity must be a whole number');
+  async adjustStock(
+    productId: number,
+    quantity: number,
+    reference?: string,
+    warehouseId?: number,
+    user?: Actor,
+  ) {
+    if (!quantity || quantity === 0)
+      throw new BadRequestException('Adjustment quantity cannot be zero');
+    if (!Number.isInteger(quantity))
+      throw new BadRequestException(
+        'Adjustment quantity must be a whole number',
+      );
 
     return this.prisma.$transaction(async (tx) => {
       const warehouse = await this.getWarehouse(tx, warehouseId);
@@ -329,7 +549,10 @@ export class InventoryService {
       await this.applyWarehouseDelta(tx, warehouse.id, product, quantity);
 
       const newStock = product.stock + quantity;
-      if (newStock < 0) throw new BadRequestException(`Adjustment would make consolidated stock negative. Current stock: ${product.stock}`);
+      if (newStock < 0)
+        throw new BadRequestException(
+          `Adjustment would make consolidated stock negative. Current stock: ${product.stock}`,
+        );
 
       await tx.stockMovement.create({
         data: {
@@ -340,7 +563,8 @@ export class InventoryService {
           unitCost: product.costPrice,
           responsibleId: user?.id || null,
           responsibleName: this.actorName(user),
-          reference: reference || `Manual stock adjustment in ${warehouse.name}`,
+          reference:
+            reference || `Manual stock adjustment in ${warehouse.name}`,
         },
       });
 
@@ -358,13 +582,25 @@ export class InventoryService {
     const destinationWarehouseId = Number(data.destinationWarehouseId);
     const items = Array.isArray(data.items) ? data.items : [];
 
-    if (!sourceWarehouseId || !destinationWarehouseId) throw new BadRequestException('Source and destination warehouses are required');
-    if (sourceWarehouseId === destinationWarehouseId) throw new BadRequestException('Source and destination warehouses must be different');
-    if (items.length === 0) throw new BadRequestException('Transfer must contain at least one product');
+    if (!sourceWarehouseId || !destinationWarehouseId)
+      throw new BadRequestException(
+        'Source and destination warehouses are required',
+      );
+    if (sourceWarehouseId === destinationWarehouseId)
+      throw new BadRequestException(
+        'Source and destination warehouses must be different',
+      );
+    if (items.length === 0)
+      throw new BadRequestException(
+        'Transfer must contain at least one product',
+      );
 
     return this.prisma.$transaction(async (tx) => {
       const sourceWarehouse = await this.getWarehouse(tx, sourceWarehouseId);
-      const destinationWarehouse = await this.getWarehouse(tx, destinationWarehouseId);
+      const destinationWarehouse = await this.getWarehouse(
+        tx,
+        destinationWarehouseId,
+      );
 
       const normalizedItems: Array<{
         product: any;
@@ -376,12 +612,22 @@ export class InventoryService {
         const productId = Number(item.productId);
         const quantity = Number(item.quantity);
         if (!productId || quantity <= 0 || !Number.isInteger(quantity)) {
-          throw new BadRequestException('Transfer quantities must be positive whole numbers');
+          throw new BadRequestException(
+            'Transfer quantities must be positive whole numbers',
+          );
         }
 
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product) throw new BadRequestException(`Product ID ${productId} not found`);
-        await this.applyWarehouseDelta(tx, sourceWarehouse.id, product, -quantity);
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+        });
+        if (!product)
+          throw new BadRequestException(`Product ID ${productId} not found`);
+        await this.applyWarehouseDelta(
+          tx,
+          sourceWarehouse.id,
+          product,
+          -quantity,
+        );
         await this.ensureWarehouseStock(tx, destinationWarehouse.id, product);
 
         normalizedItems.push({
@@ -452,10 +698,18 @@ export class InventoryService {
       });
 
       if (!transfer) throw new NotFoundException('Transfer not found');
-      if (transfer.status !== 'In Transit') throw new BadRequestException('Only in-transit transfers can be received');
+      if (transfer.status !== 'In Transit')
+        throw new BadRequestException(
+          'Only in-transit transfers can be received',
+        );
 
       for (const item of transfer.items) {
-        await this.applyWarehouseDelta(tx, transfer.destinationWarehouseId, item.product, item.quantity);
+        await this.applyWarehouseDelta(
+          tx,
+          transfer.destinationWarehouseId,
+          item.product,
+          item.quantity,
+        );
         await tx.stockMovement.create({
           data: {
             productId: item.productId,
@@ -505,10 +759,18 @@ export class InventoryService {
       });
 
       if (!transfer) throw new NotFoundException('Transfer not found');
-      if (transfer.status !== 'In Transit') throw new BadRequestException('Only in-transit transfers can be cancelled');
+      if (transfer.status !== 'In Transit')
+        throw new BadRequestException(
+          'Only in-transit transfers can be cancelled',
+        );
 
       for (const item of transfer.items) {
-        await this.applyWarehouseDelta(tx, transfer.sourceWarehouseId, item.product, item.quantity);
+        await this.applyWarehouseDelta(
+          tx,
+          transfer.sourceWarehouseId,
+          item.product,
+          item.quantity,
+        );
         await tx.stockMovement.create({
           data: {
             productId: item.productId,

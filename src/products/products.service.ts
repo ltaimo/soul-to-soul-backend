@@ -31,12 +31,19 @@ export class ProductsService {
 
   async createProduct(data: any) {
     if (data.initialStock > 0 && (!data.costPrice || data.costPrice <= 0)) {
-      throw new BadRequestException('Cost is required when Initial Stock is provided.');
+      throw new BadRequestException(
+        'Cost is required when Initial Stock is provided.',
+      );
     }
-    
+
     // Selling price required for finished goods
-    if (data.type === 'Finished Good' && (!data.sellingPrice || data.sellingPrice <= 0)) {
-       throw new BadRequestException('Selling price is strictly required for finished goods.');
+    if (
+      data.type === 'Finished Good' &&
+      (!data.sellingPrice || data.sellingPrice <= 0)
+    ) {
+      throw new BadRequestException(
+        'Selling price is strictly required for finished goods.',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -54,15 +61,23 @@ export class ProductsService {
           costPrice: Number(data.costPrice) || 0,
           sellingPrice: Number(data.sellingPrice) || 0,
           minStock: Number(data.minStock) || 0,
-          loyaltyPointsEarned: Math.max(0, Number(data.loyaltyPointsEarned) || 0),
-          redemptionPointsCost: Math.max(0, Number(data.redemptionPointsCost) || 0),
+          loyaltyPointsEarned: Math.max(
+            0,
+            Number(data.loyaltyPointsEarned) || 0,
+          ),
+          redemptionPointsCost: Math.max(
+            0,
+            Number(data.redemptionPointsCost) || 0,
+          ),
           supplierId: data.supplierId ? Number(data.supplierId) : null,
           status: data.status || 'Active',
-          stock: Number(data.initialStock) || 0
-        }
+          stock: Number(data.initialStock) || 0,
+        },
       });
 
-      const warehouses = await tx.warehouse.findMany({ select: { id: true, isDefault: true } });
+      const warehouses = await tx.warehouse.findMany({
+        select: { id: true, isDefault: true },
+      });
       if (warehouses.length === 0) {
         const defaultWarehouse = await this.ensureDefaultWarehouse(tx);
         warehouses.push({ id: defaultWarehouse.id, isDefault: true });
@@ -70,7 +85,12 @@ export class ProductsService {
 
       for (const warehouse of warehouses) {
         await tx.warehouseStock.upsert({
-          where: { warehouseId_productId: { warehouseId: warehouse.id, productId: product.id } },
+          where: {
+            warehouseId_productId: {
+              warehouseId: warehouse.id,
+              productId: product.id,
+            },
+          },
           update: {},
           create: {
             warehouseId: warehouse.id,
@@ -85,7 +105,7 @@ export class ProductsService {
       if (data.initialStock > 0) {
         const warehouse = await this.ensureDefaultWarehouse(tx);
         const batchNumber = `INIT-${randomBytes(4).toString('hex').toUpperCase()}`;
-        
+
         await tx.inventoryBatch.create({
           data: {
             productId: product.id,
@@ -93,13 +113,21 @@ export class ProductsService {
             batchNumber,
             quantity: Number(data.initialStock),
             unitCost: Number(data.costPrice),
-            mfgDate: new Date()
-          }
+            mfgDate: new Date(),
+          },
         });
 
         await tx.warehouseStock.upsert({
-          where: { warehouseId_productId: { warehouseId: warehouse.id, productId: product.id } },
-          update: { quantity: { increment: Number(data.initialStock) }, minStock: product.minStock },
+          where: {
+            warehouseId_productId: {
+              warehouseId: warehouse.id,
+              productId: product.id,
+            },
+          },
+          update: {
+            quantity: { increment: Number(data.initialStock) },
+            minStock: product.minStock,
+          },
           create: {
             warehouseId: warehouse.id,
             productId: product.id,
@@ -115,8 +143,8 @@ export class ProductsService {
             quantity: Number(data.initialStock),
             movementType: 'INITIAL_ADJUSTMENT',
             unitCost: Number(data.costPrice),
-            reference: `Initial stock at product creation in ${warehouse.name}`
-          }
+            reference: `Initial stock at product creation in ${warehouse.name}`,
+          },
         });
       }
 
@@ -141,16 +169,27 @@ export class ProductsService {
           costPrice: Number(data.costPrice),
           sellingPrice: Number(data.sellingPrice),
           minStock: Number(data.minStock),
-          loyaltyPointsEarned: Math.max(0, Number(data.loyaltyPointsEarned) || 0),
-          redemptionPointsCost: Math.max(0, Number(data.redemptionPointsCost) || 0),
+          loyaltyPointsEarned: Math.max(
+            0,
+            Number(data.loyaltyPointsEarned) || 0,
+          ),
+          redemptionPointsCost: Math.max(
+            0,
+            Number(data.redemptionPointsCost) || 0,
+          ),
           supplierId: data.supplierId ? Number(data.supplierId) : null,
-          status: data.status
-        }
+          status: data.status,
+        },
       });
 
       const defaultWarehouse = await this.ensureDefaultWarehouse(tx);
       await tx.warehouseStock.upsert({
-        where: { warehouseId_productId: { warehouseId: defaultWarehouse.id, productId: id } },
+        where: {
+          warehouseId_productId: {
+            warehouseId: defaultWarehouse.id,
+            productId: id,
+          },
+        },
         update: { minStock: Number(data.minStock) || 0 },
         create: {
           warehouseId: defaultWarehouse.id,
@@ -169,7 +208,7 @@ export class ProductsService {
   async setStatus(id: number, status: string) {
     const product = await this.prisma.product.update({
       where: { id },
-      data: { status }
+      data: { status },
     });
     return { success: true, product };
   }

@@ -10,9 +10,12 @@ export class ProductionController {
   @Roles('manager', 'stock_manager', 'production_manager')
   async runProductionBatch(
     @Body('finishedGoodId') finishedGoodId: number,
-    @Body('targetQuantity') targetQuantity: number
+    @Body('targetQuantity') targetQuantity: number,
   ) {
-    return this.productionService.runProductionBatch(Number(finishedGoodId), Number(targetQuantity));
+    return this.productionService.runProductionBatch(
+      Number(finishedGoodId),
+      Number(targetQuantity),
+    );
   }
 
   @Get('bom/:id')
@@ -27,7 +30,11 @@ export class ProductionController {
     @Body('componentId') componentId: number,
     @Body('quantityRequired') quantityRequired: number,
   ) {
-    return this.productionService.setBOMItem(Number(finishedGoodId), Number(componentId), Number(quantityRequired));
+    return this.productionService.setBOMItem(
+      Number(finishedGoodId),
+      Number(componentId),
+      Number(quantityRequired),
+    );
   }
 
   @Delete('bom/:id')

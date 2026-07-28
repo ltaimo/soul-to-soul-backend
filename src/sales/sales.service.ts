@@ -30,13 +30,20 @@ export class SalesService {
 
   private async getWarehouse(tx: any, warehouseId?: number) {
     if (!warehouseId) return this.ensureDefaultWarehouse(tx);
-    const warehouse = await tx.warehouse.findUnique({ where: { id: warehouseId } });
+    const warehouse = await tx.warehouse.findUnique({
+      where: { id: warehouseId },
+    });
     if (!warehouse) throw new BadRequestException('Warehouse not found.');
-    if (warehouse.status === 'Inactive') throw new BadRequestException('Warehouse is inactive.');
+    if (warehouse.status === 'Inactive')
+      throw new BadRequestException('Warehouse is inactive.');
     return warehouse;
   }
 
-  private async ensureWarehouseStock(tx: any, warehouseId: number, product: any) {
+  private async ensureWarehouseStock(
+    tx: any,
+    warehouseId: number,
+    product: any,
+  ) {
     return tx.warehouseStock.upsert({
       where: { warehouseId_productId: { warehouseId, productId: product.id } },
       update: {},
@@ -59,7 +66,11 @@ export class SalesService {
     amountPaid?: number;
     sellerId?: number;
     sellerName?: string;
+    commercialPartnerId?: number;
     warehouseId?: number;
+    channel?: string;
+    orderReference?: string;
+    fulfillmentStatus?: string;
     customerCode?: string;
     redeemPoints?: boolean;
     items: { productId: number; quantity: number }[];
@@ -74,7 +85,37 @@ export class SalesService {
       let totalRevenue = 0;
       let totalCogs = 0;
       let customer: any = null;
-      const warehouse = await this.getWarehouse(tx, data.warehouseId);
+      let commercialPartner: any = null;
+
+      if (data.commercialPartnerId) {
+        commercialPartner = await tx.commercialPartner.findUnique({
+          where: { id: data.commercialPartnerId },
+        });
+        if (!commercialPartner)
+          throw new BadRequestException('Seller or reseller not found.');
+        if (commercialPartner.status === 'Inactive')
+          throw new BadRequestException('Seller or reseller is inactive.');
+      }
+
+      const saleChannel = ['Store', 'Online', 'Order', 'Reseller'].includes(
+        data.channel || '',
+      )
+        ? data.channel
+        : commercialPartner?.defaultSaleChannel || 'Store';
+      const fulfillmentStatus = [
+        'Delivered',
+        'Pending',
+        'In Transit',
+        'Pickup',
+      ].includes(data.fulfillmentStatus || '')
+        ? data.fulfillmentStatus
+        : ['Online', 'Order'].includes(saleChannel || '')
+          ? 'Pending'
+          : 'Delivered';
+      const warehouse = await this.getWarehouse(
+        tx,
+        data.warehouseId || commercialPartner?.warehouseId,
+      );
 
       if (data.customerCode && !data.customerId) {
         customer = await tx.customer.findFirst({
@@ -86,51 +127,74 @@ export class SalesService {
             ],
           },
         });
-        if (!customer) throw new BadRequestException('Customer code not found.');
+        if (!customer)
+          throw new BadRequestException('Customer code not found.');
       } else if (data.customerId) {
-        customer = await tx.customer.findUnique({ where: { id: data.customerId } });
+        customer = await tx.customer.findUnique({
+          where: { id: data.customerId },
+        });
         if (!customer) throw new BadRequestException('Customer not found.');
-      } else if (data.saveCustomer && data.customerName && data.customerName !== 'Retail Customer') {
+      } else if (
+        data.saveCustomer &&
+        data.customerName &&
+        data.customerName !== 'Retail Customer'
+      ) {
         const existingCustomer = data.customerEmail
-          ? await tx.customer.findFirst({ where: { email: data.customerEmail } })
+          ? await tx.customer.findFirst({
+              where: { email: data.customerEmail },
+            })
           : data.customerPhone
-            ? await tx.customer.findFirst({ where: { phone: data.customerPhone } })
+            ? await tx.customer.findFirst({
+                where: { phone: data.customerPhone },
+              })
             : null;
 
-        customer = existingCustomer || await tx.customer.create({
-          data: {
-            fullName: data.customerName,
-            email: data.customerEmail || null,
-            phone: data.customerPhone || null,
-          }
-        });
+        customer =
+          existingCustomer ||
+          (await tx.customer.create({
+            data: {
+              fullName: data.customerName,
+              email: data.customerEmail || null,
+              phone: data.customerPhone || null,
+            },
+          }));
 
         if (!customer.customerCode) {
           customer = await tx.customer.update({
             where: { id: customer.id },
-            data: { customerCode: `CUST-${String(customer.id).padStart(5, '0')}` },
+            data: {
+              customerCode: `CUST-${String(customer.id).padStart(5, '0')}`,
+            },
           });
         }
       }
-      
+
       const saleItemsToCreate: any[] = [];
       let pointsEarned = 0;
       let pointsRedeemed = 0;
 
       for (const item of items) {
         if (item.quantity <= 0) {
-          throw new BadRequestException(`Quantity for product ${item.productId} must be positive.`);
+          throw new BadRequestException(
+            `Quantity for product ${item.productId} must be positive.`,
+          );
         }
 
         const product = await tx.product.findUnique({
-          where: { id: item.productId }
+          where: { id: item.productId },
         });
 
         if (!product) {
-          throw new BadRequestException(`Product ID ${item.productId} not found.`);
+          throw new BadRequestException(
+            `Product ID ${item.productId} not found.`,
+          );
         }
 
-        const warehouseStock = await this.ensureWarehouseStock(tx, warehouse.id, product);
+        const warehouseStock = await this.ensureWarehouseStock(
+          tx,
+          warehouse.id,
+          product,
+        );
 
         if (warehouseStock.quantity < item.quantity) {
           throw new BadRequestException(
@@ -139,11 +203,15 @@ export class SalesService {
         }
 
         if (product.stock < item.quantity) {
-          throw new BadRequestException(`Insufficient consolidated stock for ${product.name}. Needed: ${item.quantity}, Available: ${product.stock}`);
+          throw new BadRequestException(
+            `Insufficient consolidated stock for ${product.name}. Needed: ${item.quantity}, Available: ${product.stock}`,
+          );
         }
 
         // Calculate line financial metrics based on LOCKED selling and cost price
-        const discountRate = customer?.discountPercent ? customer.discountPercent / 100 : 0;
+        const discountRate = customer?.discountPercent
+          ? customer.discountPercent / 100
+          : 0;
         const unitSellingPrice = product.sellingPrice * (1 - discountRate);
         const lineRevenue = item.quantity * unitSellingPrice;
         const lineCogs = item.quantity * product.costPrice;
@@ -166,11 +234,16 @@ export class SalesService {
         // 1. Deduct Product Stock
         await tx.product.update({
           where: { id: product.id },
-          data: { stock: { decrement: item.quantity } }
+          data: { stock: { decrement: item.quantity } },
         });
 
         await tx.warehouseStock.update({
-          where: { warehouseId_productId: { warehouseId: warehouse.id, productId: product.id } },
+          where: {
+            warehouseId_productId: {
+              warehouseId: warehouse.id,
+              productId: product.id,
+            },
+          },
           data: { quantity: { decrement: item.quantity } },
         });
 
@@ -185,41 +258,71 @@ export class SalesService {
             responsibleId: data.sellerId || null,
             responsibleName: data.sellerName || null,
             reference: `Sale from ${warehouse.name}`,
-          }
+          },
         });
       }
 
       const paymentMethod = data.paymentMethod || 'Cash';
       const payingWithPoints = data.redeemPoints || paymentMethod === 'Points';
       if (payingWithPoints) {
-        if (!customer) throw new BadRequestException('A loyal customer is required to pay with points.');
-        if (pointsRedeemed <= 0) throw new BadRequestException('One or more products do not have redemption points configured.');
+        if (!customer)
+          throw new BadRequestException(
+            'A loyal customer is required to pay with points.',
+          );
+        if (pointsRedeemed <= 0)
+          throw new BadRequestException(
+            'One or more products do not have redemption points configured.',
+          );
         if ((customer.loyaltyPoints || 0) < pointsRedeemed) {
-          throw new BadRequestException(`Insufficient loyalty points. Needed: ${pointsRedeemed}, Available: ${customer.loyaltyPoints || 0}`);
+          throw new BadRequestException(
+            `Insufficient loyalty points. Needed: ${pointsRedeemed}, Available: ${customer.loyaltyPoints || 0}`,
+          );
         }
         totalRevenue = 0;
         pointsEarned = 0;
       }
 
-      const amountPaid = payingWithPoints ? 0 : Number(data.amountPaid ?? totalRevenue);
+      const amountPaid = payingWithPoints
+        ? 0
+        : Number(data.amountPaid ?? totalRevenue);
       if (amountPaid < totalRevenue) {
-        throw new BadRequestException('Amount paid cannot be lower than the sale total.');
+        throw new BadRequestException(
+          'Amount paid cannot be lower than the sale total.',
+        );
       }
       const changeGiven = amountPaid - totalRevenue;
       const seller = data.sellerId
-        ? await tx.user.findUnique({ where: { id: data.sellerId }, select: { fullName: true, email: true } })
+        ? await tx.user.findUnique({
+            where: { id: data.sellerId },
+            select: { fullName: true, email: true },
+          })
         : null;
+      const commissionRate = Number(commercialPartner?.commissionRate) || 0;
+      const commissionAmount = totalRevenue * (commissionRate / 100);
 
       // 3. Create Sale Header and Items
       const sale = await tx.sale.create({
         data: {
           customerId: customer?.id || null,
-          customerName: customer?.fullName || data.customerName || 'Retail Customer',
+          customerName:
+            customer?.fullName || data.customerName || 'Retail Customer',
           customerEmail: customer?.email || data.customerEmail || null,
           warehouseId: warehouse.id,
           warehouseName: warehouse.name,
+          commercialPartnerId: commercialPartner?.id || null,
           sellerId: data.sellerId || null,
-          sellerName: seller?.fullName || data.sellerName || seller?.email || null,
+          sellerName:
+            commercialPartner?.name ||
+            seller?.fullName ||
+            data.sellerName ||
+            seller?.email ||
+            null,
+          sellerType: commercialPartner?.type || null,
+          commissionRate,
+          commissionAmount,
+          channel: saleChannel,
+          orderReference: data.orderReference?.trim() || null,
+          fulfillmentStatus,
           paymentMethod,
           amountPaid,
           changeGiven,
@@ -228,10 +331,14 @@ export class SalesService {
           totalRevenue,
           totalCogs,
           items: {
-            create: saleItemsToCreate
-          }
+            create: saleItemsToCreate,
+          },
         },
-        include: { warehouse: true, items: { include: { product: true } } }
+        include: {
+          warehouse: true,
+          commercialPartner: true,
+          items: { include: { product: true } },
+        },
       });
 
       if (customer) {
@@ -248,8 +355,11 @@ export class SalesService {
       return {
         success: true,
         saleId: sale.id,
-        marginGiven: totalRevenue > 0 ? (((totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1) : 0,
-        sale
+        marginGiven:
+          totalRevenue > 0
+            ? (((totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1)
+            : 0,
+        sale,
       };
     });
   }
@@ -258,7 +368,11 @@ export class SalesService {
     return this.prisma.sale.findMany({
       orderBy: { date: 'desc' },
       take: 50,
-      include: { warehouse: true, items: { include: { product: true } } }
+      include: {
+        warehouse: true,
+        commercialPartner: true,
+        items: { include: { product: true } },
+      },
     });
   }
 }

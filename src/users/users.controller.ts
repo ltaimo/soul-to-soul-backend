@@ -23,12 +23,28 @@ export class UsersController {
   }
 
   @Patch(':id/status')
-  async changeStatus(@Param('id') id: string, @Body('status') status: string, @Body('updatedBy') updatedBy?: number) {
-    return this.usersService.changeStatus(Number(id), status, Number(updatedBy) || undefined);
+  async changeStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+    @Body('updatedBy') updatedBy?: number,
+  ) {
+    return this.usersService.changeStatus(
+      Number(id),
+      status,
+      Number(updatedBy) || undefined,
+    );
   }
 
   @Patch(':id/role')
-  async changeRole(@Param('id') id: string, @Body('role') role: string, @Body('updatedBy') updatedBy?: number) {
-    return this.usersService.changeRole(Number(id), role, Number(updatedBy) || undefined);
+  async changeRole(
+    @Param('id') id: string,
+    @Body('role') role: string,
+    @Body('updatedBy') updatedBy?: number,
+  ) {
+    return this.usersService.changeRole(
+      Number(id),
+      role,
+      Number(updatedBy) || undefined,
+    );
   }
 }
