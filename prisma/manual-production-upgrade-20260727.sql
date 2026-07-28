@@ -181,6 +181,9 @@ ALTER TABLE "SystemSetting"
   ADD COLUMN IF NOT EXISTS "facebookUrl" TEXT,
   ADD COLUMN IF NOT EXISTS "tiktokUrl" TEXT;
 
+ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "hrRoles" TEXT NOT NULL DEFAULT 'Manager,Cashier,Salesperson,Stock Manager,Production Assistant,Administrator';
+ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "hrDepartments" TEXT NOT NULL DEFAULT 'Sales,Store,Warehouse,Production,Administration,Finance';
+
 CREATE TABLE IF NOT EXISTS "AuditLog" (
   "id" SERIAL PRIMARY KEY,
   "userId" INTEGER,

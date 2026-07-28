@@ -15,6 +15,9 @@ export class SettingsService {
     productUnits: 'pcs,kg,g,l,ml,box',
     attendanceStatuses: 'Present,Absent,Late,Half Day,Leave',
     payFrequencies: 'Monthly,Weekly,Daily,Hourly',
+    hrRoles:
+      'Manager,Cashier,Salesperson,Stock Manager,Production Assistant,Administrator',
+    hrDepartments: 'Sales,Store,Warehouse,Production,Administration,Finance',
   };
 
   private csvToArray(value?: string) {
@@ -118,6 +121,14 @@ export class SettingsService {
         settings.payFrequencies,
         this.defaults.payFrequencies,
       ),
+      hrRolesOptions: this.optionsOrDefault(
+        settings.hrRoles,
+        this.defaults.hrRoles,
+      ),
+      hrDepartmentsOptions: this.optionsOrDefault(
+        settings.hrDepartments,
+        this.defaults.hrDepartments,
+      ),
       hrPaymentTypesList: this.activeListOrDefault(
         settings.hrPaymentTypes,
         this.defaults.hrPaymentTypes,
@@ -149,6 +160,14 @@ export class SettingsService {
       payFrequenciesList: this.activeListOrDefault(
         settings.payFrequencies,
         this.defaults.payFrequencies,
+      ),
+      hrRolesList: this.activeListOrDefault(
+        settings.hrRoles,
+        this.defaults.hrRoles,
+      ),
+      hrDepartmentsList: this.activeListOrDefault(
+        settings.hrDepartments,
+        this.defaults.hrDepartments,
       ),
     };
   }
@@ -246,6 +265,20 @@ export class SettingsService {
           data.payFrequenciesList ??
           current?.payFrequencies,
         this.defaults.payFrequencies,
+      ),
+      hrRoles: this.arrayToStorage(
+        data.hrRolesOptions ??
+          data.hrRoles ??
+          data.hrRolesList ??
+          current?.hrRoles,
+        this.defaults.hrRoles,
+      ),
+      hrDepartments: this.arrayToStorage(
+        data.hrDepartmentsOptions ??
+          data.hrDepartments ??
+          data.hrDepartmentsList ??
+          current?.hrDepartments,
+        this.defaults.hrDepartments,
       ),
     };
 

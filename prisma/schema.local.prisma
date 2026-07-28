@@ -337,6 +337,8 @@ model SystemSetting {
   productUnits       String   @default("pcs,kg,g,l,ml,box")
   attendanceStatuses String   @default("Present,Absent,Late,Half Day,Leave")
   payFrequencies     String   @default("Monthly,Weekly,Daily,Hourly")
+  hrRoles            String   @default("Manager,Cashier,Salesperson,Stock Manager,Production Assistant,Administrator")
+  hrDepartments      String   @default("Sales,Store,Warehouse,Production,Administration,Finance")
   updatedAt          DateTime @updatedAt
 }
 
