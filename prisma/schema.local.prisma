@@ -343,16 +343,22 @@ model SystemSetting {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  fullName     String
-  email        String   @unique
-  passwordHash String
-  role         String   @default("staff") // admin, manager, staff, viewer
-  status       String   @default("active") // active, inactive
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    Int?
-  updatedBy    Int?
+  id                 Int      @id @default(autoincrement())
+  fullName           String
+  email              String?  @unique
+  username           String?  @unique
+  phone              String?  @unique
+  employeeId         Int?
+  passwordHash       String
+  mustChangePassword Boolean  @default(false)
+  role               String   @default("staff") // admin, manager, staff, viewer
+  status             String   @default("active") // active, inactive
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  createdBy          Int?
+  updatedBy          Int?
+
+  @@index([employeeId])
 }
 
 model AuditLog {

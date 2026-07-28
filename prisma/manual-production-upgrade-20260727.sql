@@ -28,6 +28,17 @@ CREATE TABLE IF NOT EXISTS "User" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
 
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "employeeId" INTEGER;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "User" ALTER COLUMN "email" DROP NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_phone_key" ON "User"("phone");
+CREATE INDEX IF NOT EXISTS "User_employeeId_idx" ON "User"("employeeId");
+
 INSERT INTO "SystemSetting" ("id", "companyName", "updatedAt")
 VALUES (1, 'Soul2Soul', CURRENT_TIMESTAMP)
 ON CONFLICT ("id") DO NOTHING;

@@ -47,4 +47,19 @@ export class UsersController {
       Number(updatedBy) || undefined,
     );
   }
+
+  @Patch(':id/reset-password')
+  async resetPassword(
+    @Param('id') id: string,
+    @Body('password') password: string,
+    @Body('mustChangePassword') mustChangePassword?: boolean,
+    @Body('updatedBy') updatedBy?: number,
+  ) {
+    return this.usersService.resetPassword(
+      Number(id),
+      password,
+      mustChangePassword !== false,
+      Number(updatedBy) || undefined,
+    );
+  }
 }

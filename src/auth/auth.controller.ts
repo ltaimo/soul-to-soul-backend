@@ -9,10 +9,11 @@ export class AuthController {
   @Public()
   @Post('login')
   async login(@Body() body: any) {
-    if (!body.email || !body.password) {
-      throw new UnauthorizedException('Email and password are required');
+    const identifier = body.identifier || body.email || body.username || body.phone;
+    if (!identifier || !body.password) {
+      throw new UnauthorizedException('Identifier and password are required');
     }
-    const user = await this.authService.validateUser(body.email, body.password);
+    const user = await this.authService.validateUser(identifier, body.password);
     return this.authService.login(user);
   }
 }
