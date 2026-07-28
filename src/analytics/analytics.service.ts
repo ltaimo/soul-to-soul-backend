@@ -25,6 +25,8 @@ export class AnalyticsService {
       commercialPartners,
       employees,
       pendingPayments,
+      openGoals,
+      overdueGoals,
       auditLogs,
     ] = await Promise.all([
       this.prisma.product.findMany({}),
@@ -37,6 +39,15 @@ export class AnalyticsService {
       this.prisma.commercialPartner.findMany({}),
       this.prisma.employee.findMany({}),
       this.prisma.hrPayment.findMany({ where: { status: 'Pending' } }),
+      this.prisma.workGoal.count({
+        where: { status: { in: ['Pending', 'In Progress'] } },
+      }),
+      this.prisma.workGoal.count({
+        where: {
+          status: { in: ['Pending', 'In Progress'] },
+          dueDate: { lt: new Date() },
+        },
+      }),
       this.prisma.auditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 8,
@@ -155,6 +166,8 @@ export class AnalyticsService {
         0,
       ),
       pendingPaymentsValue,
+      openGoals,
+      overdueGoals,
       loyaltyCustomerCount: customers.filter(
         (customer) => customer.status !== 'Inactive',
       ).length,
@@ -185,7 +198,7 @@ export class AnalyticsService {
       }
     }
 
-    const [products, warehouseRows, inTransitTransfers, pendingPayments] =
+    const [products, warehouseRows, inTransitTransfers, pendingPayments, overdueGoals] =
       await Promise.all([
         this.prisma.product.findMany({ orderBy: { stock: 'asc' } }),
         this.prisma.warehouseStock.findMany({
@@ -200,6 +213,12 @@ export class AnalyticsService {
           },
         }),
         this.prisma.hrPayment.findMany({ where: { status: 'Pending' } }),
+        this.prisma.workGoal.count({
+          where: {
+            status: { in: ['Pending', 'In Progress'] },
+            dueDate: { lt: new Date() },
+          },
+        }),
       ]);
     const lowStockAlerts = warehouseRows.filter(
       (row) =>
@@ -234,6 +253,7 @@ export class AnalyticsService {
         (sum, payment) => sum + payment.amount,
         0,
       ),
+      overdueGoals,
       lowStockList: lowStockAlerts,
       stockOutList: stockOutAlerts,
       expiringList: expiringBatches,

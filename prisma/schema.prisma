@@ -386,6 +386,7 @@ model Employee {
   email            String?
   role             String?
   department       String?
+  performanceMode  String   @default("Attendance")
   salary           Float    @default(0)
   payFrequency     String   @default("Monthly")
   startDate        DateTime @default(now())
@@ -397,36 +398,42 @@ model Employee {
 
   payments   HrPayment[]
   attendance AttendanceRecord[]
+  goals      WorkGoal[]
 
   @@index([phone])
   @@index([status])
 }
 
 model HrPayment {
-  id          Int       @id @default(autoincrement())
-  employeeId  Int?
-  type        String
-  description String
-  amount      Float
-  periodicity String    @default("One-time")
-  periodStart DateTime?
-  periodEnd   DateTime?
-  dueDate     DateTime?
-  nextDueDate DateTime?
-  paidDate    DateTime?
-  method      String?
-  status      String    @default("Pending")
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  employeeId    Int?
+  type          String
+  description   String
+  amount        Float
+  periodicity   String    @default("One-time")
+  periodStart   DateTime?
+  periodEnd     DateTime?
+  dueDate       DateTime?
+  nextDueDate   DateTime?
+  paidDate      DateTime?
+  method        String?
+  status        String    @default("Pending")
+  source        String    @default("Manual")
+  payrollMonth  String?
+  receiptNumber String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   employee Employee? @relation(fields: [employeeId], references: [id])
 
+  @@unique([employeeId, type, payrollMonth])
   @@index([type])
   @@index([periodicity])
   @@index([status])
   @@index([dueDate])
   @@index([nextDueDate])
+  @@index([payrollMonth])
 }
 
 model AttendanceRecord {
@@ -445,4 +452,24 @@ model AttendanceRecord {
   @@unique([employeeId, date])
   @@index([date])
   @@index([status])
+}
+
+model WorkGoal {
+  id          Int       @id @default(autoincrement())
+  employeeId  Int
+  title       String
+  description String?
+  dueDate     DateTime?
+  status      String    @default("Pending")
+  progress    Int       @default(0)
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([dueDate])
 }

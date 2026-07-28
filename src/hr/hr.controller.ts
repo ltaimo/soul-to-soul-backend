@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { Roles } from '../auth/roles.decorator';
 import { HrService } from './hr.service';
 
@@ -40,6 +40,11 @@ export class HrController {
     return this.hrService.getPayments();
   }
 
+  @Get('payroll')
+  async getPayroll(@Query('month') month?: string) {
+    return this.hrService.getPayroll(month);
+  }
+
   @Post('payments')
   async createPayment(@Body() data: any) {
     return this.hrService.createPayment(data);
@@ -58,5 +63,20 @@ export class HrController {
   @Post('attendance')
   async upsertAttendance(@Body() data: any) {
     return this.hrService.upsertAttendance(data);
+  }
+
+  @Get('goals')
+  async getGoals() {
+    return this.hrService.getGoals();
+  }
+
+  @Post('goals')
+  async createGoal(@Body() data: any) {
+    return this.hrService.createGoal(data);
+  }
+
+  @Put('goals/:id')
+  async updateGoal(@Param('id') id: string, @Body() data: any) {
+    return this.hrService.updateGoal(Number(id), data);
   }
 }

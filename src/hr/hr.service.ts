@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma.service';
 const employeeStatuses = ['Active', 'Inactive'];
 const paymentStatuses = ['Pending', 'Paid', 'Cancelled'];
 const attendanceStatuses = ['Present', 'Absent', 'Late', 'Half Day', 'Leave'];
+const performanceModes = ['Attendance', 'Goals'];
+const goalStatuses = ['Pending', 'In Progress', 'Completed', 'Missed', 'Cancelled'];
 const paymentPeriodicities = [
   'One-time',
   'Daily',
@@ -18,6 +20,7 @@ export class HrService {
   constructor(private prisma: PrismaService) {}
 
   async getSummary() {
+    await this.ensureMonthlyPayroll();
     const [employees, pendingPayments, paidPayments, attendanceToday] =
       await Promise.all([
         this.prisma.employee.findMany({ where: { status: 'Active' } }),
@@ -29,6 +32,15 @@ export class HrService {
           },
         }),
       ]);
+    const openGoals = await this.prisma.workGoal.count({
+      where: { status: { in: ['Pending', 'In Progress'] } },
+    });
+    const overdueGoals = await this.prisma.workGoal.count({
+      where: {
+        status: { in: ['Pending', 'In Progress'] },
+        dueDate: { lt: this.normalizedDate(new Date()) },
+      },
+    });
 
     return {
       activeEmployees: employees.length,
@@ -51,6 +63,14 @@ export class HrService {
         }),
         {},
       ),
+      attendanceControlled: employees.filter(
+        (employee) => employee.performanceMode !== 'Goals',
+      ).length,
+      goalsControlled: employees.filter(
+        (employee) => employee.performanceMode === 'Goals',
+      ).length,
+      openGoals,
+      overdueGoals,
     };
   }
 
@@ -59,7 +79,7 @@ export class HrService {
       orderBy: { fullName: 'asc' },
       include: {
         _count: {
-          select: { payments: true, attendance: true },
+          select: { payments: true, attendance: true, goals: true },
         },
       },
     });
@@ -93,10 +113,41 @@ export class HrService {
   }
 
   async getPayments() {
+    await this.ensureMonthlyPayroll();
     return this.prisma.hrPayment.findMany({
       orderBy: [{ status: 'asc' }, { dueDate: 'desc' }, { createdAt: 'desc' }],
       include: { employee: true },
     });
+  }
+
+  async getPayroll(month?: string) {
+    const payrollMonth = this.monthKey(month);
+    await this.ensureMonthlyPayroll(payrollMonth);
+    const payments = await this.prisma.hrPayment.findMany({
+      where: { payrollMonth, type: 'Salary' },
+      orderBy: [{ employee: { fullName: 'asc' } }],
+      include: { employee: true },
+    });
+
+    const totals = payments.reduce(
+      (acc, payment) => ({
+        gross: acc.gross + payment.amount,
+        paid: acc.paid + (payment.status === 'Paid' ? payment.amount : 0),
+        pending:
+          acc.pending + (payment.status === 'Paid' ? 0 : payment.amount),
+        paidCount: acc.paidCount + (payment.status === 'Paid' ? 1 : 0),
+        pendingCount:
+          acc.pendingCount + (payment.status === 'Paid' ? 0 : 1),
+      }),
+      { gross: 0, paid: 0, pending: 0, paidCount: 0, pendingCount: 0 },
+    );
+
+    return {
+      month: payrollMonth,
+      generatedAt: new Date(),
+      payments,
+      totals,
+    };
   }
 
   async createPayment(data: any) {
@@ -128,6 +179,31 @@ export class HrService {
       include: { employee: true },
     });
     return { success: true, payment };
+  }
+
+  async getGoals() {
+    return this.prisma.workGoal.findMany({
+      orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+      include: { employee: true },
+      take: 200,
+    });
+  }
+
+  async createGoal(data: any) {
+    const goal = await this.prisma.workGoal.create({
+      data: this.toGoalData(data),
+      include: { employee: true },
+    });
+    return { success: true, goal };
+  }
+
+  async updateGoal(id: number, data: any) {
+    const goal = await this.prisma.workGoal.update({
+      where: { id },
+      data: this.toGoalData(data, true),
+      include: { employee: true },
+    });
+    return { success: true, goal };
   }
 
   async getAttendance() {
@@ -179,6 +255,9 @@ export class HrService {
       email: data.email?.trim() || null,
       role: data.role?.trim() || null,
       department: data.department?.trim() || null,
+      performanceMode: performanceModes.includes(data.performanceMode)
+        ? data.performanceMode
+        : 'Attendance',
       salary,
       payFrequency: data.payFrequency || 'Monthly',
       startDate: data.startDate ? new Date(data.startDate) : new Date(),
@@ -213,8 +292,100 @@ export class HrService {
       paidDate: data.status === 'Paid' ? this.dateOrToday(data.paidDate) : null,
       method: data.method?.trim() || null,
       status: paymentStatuses.includes(data.status) ? data.status : 'Pending',
+      source: data.source || 'Manual',
+      payrollMonth: data.payrollMonth || null,
+      receiptNumber: data.receiptNumber || null,
       notes: data.notes?.trim() || null,
     };
+  }
+
+  private toGoalData(data: any, partial = false) {
+    if (!partial && !data.employeeId) {
+      throw new BadRequestException('Employee is required');
+    }
+    if (!partial && (!data.title || !data.title.trim())) {
+      throw new BadRequestException('Goal title is required');
+    }
+
+    const patch: any = {};
+    if (data.employeeId) patch.employeeId = Number(data.employeeId);
+    if (data.title !== undefined) patch.title = data.title.trim();
+    if (data.description !== undefined)
+      patch.description = data.description?.trim() || null;
+    if (data.dueDate !== undefined)
+      patch.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    if (data.status !== undefined) {
+      if (!goalStatuses.includes(data.status)) {
+        throw new BadRequestException('Invalid goal status');
+      }
+      patch.status = data.status;
+      patch.completedAt =
+        data.status === 'Completed' ? this.dateOrToday(data.completedAt) : null;
+    }
+    if (data.progress !== undefined) {
+      patch.progress = Math.max(0, Math.min(Number(data.progress) || 0, 100));
+    }
+    if (data.notes !== undefined) patch.notes = data.notes?.trim() || null;
+    return patch;
+  }
+
+  private async ensureMonthlyPayroll(month?: string) {
+    const payrollMonth = this.monthKey(month);
+    const [year, monthIndex] = payrollMonth.split('-').map(Number);
+    const periodStart = new Date(Date.UTC(year, monthIndex - 1, 1));
+    const dueDate = new Date(Date.UTC(year, monthIndex - 1, 25));
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        status: 'Active',
+        salary: { gt: 0 },
+        payFrequency: { in: ['Monthly', 'month', 'monthly'] },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+
+    await this.prisma.$transaction(
+      employees.map((employee) =>
+        this.prisma.hrPayment.upsert({
+          where: {
+            employeeId_type_payrollMonth: {
+              employeeId: employee.id,
+              type: 'Salary',
+              payrollMonth,
+            },
+          },
+          update: {
+            amount: employee.salary,
+            description: `Salary - ${employee.fullName} - ${payrollMonth}`,
+            periodStart,
+            dueDate,
+            nextDueDate: this.addPeriod(dueDate, 'Monthly', 1),
+            source: 'Auto Payroll',
+            receiptNumber: `PAY-${payrollMonth}-${String(employee.id).padStart(4, '0')}`,
+          },
+          create: {
+            employeeId: employee.id,
+            type: 'Salary',
+            description: `Salary - ${employee.fullName} - ${payrollMonth}`,
+            amount: employee.salary,
+            periodicity: 'Monthly',
+            periodStart,
+            periodEnd: new Date(Date.UTC(year, monthIndex, 0)),
+            dueDate,
+            nextDueDate: this.addPeriod(dueDate, 'Monthly', 1),
+            status: 'Pending',
+            source: 'Auto Payroll',
+            payrollMonth,
+            receiptNumber: `PAY-${payrollMonth}-${String(employee.id).padStart(4, '0')}`,
+          },
+        }),
+      ),
+    );
+  }
+
+  private monthKey(value?: string) {
+    if (value && /^\d{4}-\d{2}$/.test(value)) return value;
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
   private expandPaymentSchedule(data: any) {
