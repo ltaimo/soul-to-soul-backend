@@ -3,19 +3,9 @@ import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class AnalyticsService {
-  private cache = new Map<string, { timestamp: number; data: any }>();
-  private readonly CACHE_TTL_MS = 30000; // 30 second cache for high velocity views
-
   constructor(private prisma: PrismaService) {}
 
   async getFinancialKPIs() {
-    if (this.cache.has('kpis')) {
-      const entry = this.cache.get('kpis')!;
-      if (Date.now() - entry.timestamp < this.CACHE_TTL_MS) {
-        return entry.data;
-      }
-    }
-
     const [
       inventory,
       warehouseStock,
@@ -29,8 +19,12 @@ export class AnalyticsService {
       overdueGoals,
       auditLogs,
     ] = await Promise.all([
-      this.prisma.product.findMany({}),
+      this.prisma.product.findMany({ where: { status: 'Active' } }),
       this.prisma.warehouseStock.findMany({
+        where: {
+          product: { status: 'Active' },
+          warehouse: { status: 'Active' },
+        },
         include: { product: true, warehouse: true },
       }),
       this.prisma.warehouse.findMany({}),
@@ -143,7 +137,7 @@ export class AnalyticsService {
       return acc;
     }, {});
 
-    const result = {
+    return {
       totalInventoryValue: totalInvValue,
       inventoryBreakdown: invBreakdown,
       totalRevenue: totalRev,
@@ -185,23 +179,20 @@ export class AnalyticsService {
         a.date.localeCompare(b.date),
       ),
     };
-
-    this.cache.set('kpis', { timestamp: Date.now(), data: result });
-    return result;
   }
 
   async getOperationalAlerts() {
-    if (this.cache.has('alerts')) {
-      const entry = this.cache.get('alerts')!;
-      if (Date.now() - entry.timestamp < this.CACHE_TTL_MS) {
-        return entry.data;
-      }
-    }
-
     const [products, warehouseRows, inTransitTransfers, pendingPayments, overdueGoals] =
       await Promise.all([
-        this.prisma.product.findMany({ orderBy: { stock: 'asc' } }),
+        this.prisma.product.findMany({
+          where: { status: 'Active' },
+          orderBy: { stock: 'asc' },
+        }),
         this.prisma.warehouseStock.findMany({
+          where: {
+            product: { status: 'Active' },
+            warehouse: { status: 'Active' },
+          },
           include: { product: true, warehouse: true },
         }),
         this.prisma.stockTransfer.findMany({
@@ -224,7 +215,7 @@ export class AnalyticsService {
       (row) =>
         row.quantity > 0 && row.minStock > 0 && row.quantity <= row.minStock,
     );
-    const stockOutAlerts = warehouseRows.filter((row) => row.quantity === 0);
+    const stockOutAlerts = products.filter((product) => product.stock === 0);
     const inTransitUnits = inTransitTransfers.reduce(
       (sum, transfer) =>
         sum +
@@ -242,7 +233,7 @@ export class AnalyticsService {
       include: { product: true },
     });
 
-    const result = {
+    return {
       lowStockCount: lowStockAlerts.length,
       stockOutCount: stockOutAlerts.length,
       expiringCount: expiringBatches.length,
@@ -260,8 +251,5 @@ export class AnalyticsService {
       inTransitList: inTransitTransfers,
       productCount: products.length,
     };
-
-    this.cache.set('alerts', { timestamp: Date.now(), data: result });
-    return result;
   }
 }
