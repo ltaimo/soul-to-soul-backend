@@ -8,6 +8,10 @@ const sensitiveKeys = [
   'access_token',
   'authorization',
   'secret',
+  'code',
+  'securityCode',
+  'verificationCode',
+  'resetCode',
   'DATABASE_URL',
 ];
 
