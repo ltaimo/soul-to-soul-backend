@@ -8,6 +8,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   private static productionUpgradePromise: Promise<void> | null = null;
 
   async onModuleInit() {
+    if (process.env.VERCEL) {
+      return;
+    }
+
     await this.$connect();
     await this.ensureProductionSchema().catch((error) => {
       console.warn(
