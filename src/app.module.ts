@@ -16,6 +16,7 @@ import { HrModule } from './hr/hr.module';
 import { CommercialModule } from './commercial/commercial.module';
 import { AuditModule } from './audit/audit.module';
 import { AdminToolsModule } from './admin-tools/admin-tools.module';
+import { FundRequestsModule } from './fund-requests/fund-requests.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -38,6 +39,7 @@ import { RolesGuard } from './auth/roles.guard';
     CommercialModule,
     AuditModule,
     AdminToolsModule,
+    FundRequestsModule,
   ],
   controllers: [AppController],
   providers: [

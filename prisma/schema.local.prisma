@@ -479,3 +479,36 @@ model WorkGoal {
   @@index([status])
   @@index([dueDate])
 }
+
+model FundRequest {
+  id             Int       @id @default(autoincrement())
+  requestNumber  String    @unique
+  requesterId    Int?
+  requesterName  String
+  requesterEmail String?
+  requesterRole  String?
+  department     String?
+  category       String
+  title          String
+  description    String?
+  amount         Float
+  currency       String    @default("MZN")
+  neededBy       DateTime?
+  priority       String    @default("Normal")
+  paymentMethod  String?
+  payeeName      String?
+  payeePhone     String?
+  payeeBank      String?
+  status         String    @default("Pending")
+  reviewedById   Int?
+  reviewedByName String?
+  reviewedAt     DateTime?
+  reviewNotes    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([category])
+}
