@@ -16,4 +16,9 @@ export class OnlineStoreController {
   async checkout(@Body() data: any) {
     return this.onlineStoreService.checkout(data);
   }
+
+  @Post('mpesa/callback')
+  async mpesaCallback(@Body() data: any) {
+    return this.onlineStoreService.handleMpesaCallback(data);
+  }
 }

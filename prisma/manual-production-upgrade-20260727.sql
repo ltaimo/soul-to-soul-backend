@@ -108,6 +108,8 @@ ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "warehouseId" INTEGER;
 ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "warehouseName" TEXT;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "loyaltyPointsEarned" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "redemptionPointsCost" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "storeFeatured" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "customerCode" TEXT;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "loyaltyPoints" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "pointsEarned" INTEGER NOT NULL DEFAULT 0;
@@ -194,6 +196,18 @@ ALTER TABLE "SystemSetting"
 
 ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "hrRoles" TEXT NOT NULL DEFAULT 'Manager,Cashier,Salesperson,Stock Manager,Production Assistant,Administrator';
 ALTER TABLE "SystemSetting" ADD COLUMN IF NOT EXISTS "hrDepartments" TEXT NOT NULL DEFAULT 'Sales,Store,Warehouse,Production,Administration,Finance';
+
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "customerPhone" TEXT;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "deliveryAddress" TEXT;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'Paid';
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "paymentReference" TEXT;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "paymentProviderData" TEXT;
+ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "notificationStatus" TEXT NOT NULL DEFAULT 'Not Required';
+
+CREATE INDEX IF NOT EXISTS "Sale_channel_idx" ON "Sale"("channel");
+CREATE INDEX IF NOT EXISTS "Sale_fulfillmentStatus_idx" ON "Sale"("fulfillmentStatus");
+CREATE INDEX IF NOT EXISTS "Sale_paymentStatus_idx" ON "Sale"("paymentStatus");
+CREATE INDEX IF NOT EXISTS "Sale_orderReference_idx" ON "Sale"("orderReference");
 
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "performanceMode" TEXT NOT NULL DEFAULT 'Attendance';
 

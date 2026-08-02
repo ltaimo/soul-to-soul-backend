@@ -1,6 +1,17 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 
+const resolvePaymentStatus = (
+  channel?: string,
+  fulfillmentStatus?: string,
+  paymentMethod = 'Cash',
+) => {
+  if (channel === 'Online') return 'Pending';
+  if (fulfillmentStatus === 'Pending Payment') return 'Pending';
+  if (paymentMethod.toLowerCase().includes('pending')) return 'Pending';
+  return 'Paid';
+};
+
 @Injectable()
 export class SalesService {
   constructor(private prisma: PrismaService) {}
@@ -61,8 +72,13 @@ export class SalesService {
     customerName?: string;
     customerEmail?: string;
     customerPhone?: string;
+    deliveryAddress?: string;
     saveCustomer?: boolean;
     paymentMethod?: string;
+    paymentStatus?: string;
+    paymentReference?: string;
+    paymentProviderData?: string;
+    notificationStatus?: string;
     amountPaid?: number;
     sellerId?: number;
     sellerName?: string;
@@ -264,6 +280,11 @@ export class SalesService {
       }
 
       const paymentMethod = data.paymentMethod || 'Cash';
+      const paymentStatus = ['Paid', 'Pending', 'Failed', 'Manual Review'].includes(
+        data.paymentStatus || '',
+      )
+        ? data.paymentStatus
+        : resolvePaymentStatus(saleChannel, fulfillmentStatus, paymentMethod);
       const payingWithPoints = data.redeemPoints || paymentMethod === 'Points';
       if (payingWithPoints) {
         if (!customer)
@@ -312,6 +333,8 @@ export class SalesService {
           customerName:
             customer?.fullName || data.customerName || 'Retail Customer',
           customerEmail: customer?.email || data.customerEmail || null,
+          customerPhone: customer?.phone || data.customerPhone || null,
+          deliveryAddress: data.deliveryAddress?.trim() || null,
           warehouseId: warehouse.id,
           warehouseName: warehouse.name,
           commercialPartnerId: commercialPartner?.id || null,
@@ -329,6 +352,10 @@ export class SalesService {
           orderReference: data.orderReference?.trim() || null,
           fulfillmentStatus,
           paymentMethod,
+          paymentStatus,
+          paymentReference: data.paymentReference?.trim() || null,
+          paymentProviderData: data.paymentProviderData || null,
+          notificationStatus: data.notificationStatus || 'Not Required',
           amountPaid,
           changeGiven,
           pointsEarned,

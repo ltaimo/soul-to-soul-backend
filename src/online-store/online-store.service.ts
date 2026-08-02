@@ -7,6 +7,23 @@ type StoreCheckoutItem = {
   quantity: number;
 };
 
+type StoreCheckoutContext = {
+  orderReference: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  deliveryAddress: string;
+  notes: string;
+  paymentMethod: string;
+  amount: number;
+  items: Array<{
+    name: string;
+    sku: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+};
+
 @Injectable()
 export class OnlineStoreService {
   constructor(
@@ -16,6 +33,144 @@ export class OnlineStoreService {
 
   private cleanText(value: unknown, fallback = '') {
     return String(value ?? fallback).trim();
+  }
+
+  private buildProductImage(product: any) {
+    if (product.imageUrl) return product.imageUrl;
+    const token = encodeURIComponent(
+      `${product.category || 'Soul2Soul'} ${product.name || 'natural product'}`,
+    );
+    return `https://placehold.co/900x900/f8f1df/2f3b25?text=${token}`;
+  }
+
+  private isMpesaConfigured() {
+    return Boolean(process.env.MPESA_C2B_URL && process.env.MPESA_API_KEY);
+  }
+
+  private async initiateMpesaPayment(context: StoreCheckoutContext) {
+    if (context.paymentMethod !== 'M-Pesa') {
+      return {
+        status: 'Manual Review',
+        reference: context.orderReference,
+        message: 'Payment will be confirmed by the Soul2Soul team.',
+      };
+    }
+
+    if (!this.isMpesaConfigured()) {
+      return {
+        status: 'Pending',
+        reference: context.orderReference,
+        message:
+          'M-Pesa automatic collection is not active yet. Please pay by M-Pesa and share the confirmation on WhatsApp.',
+      };
+    }
+
+    try {
+      const response = await fetch(process.env.MPESA_C2B_URL as string, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.MPESA_API_KEY}`,
+        },
+        body: JSON.stringify({
+          amount: context.amount,
+          currency: 'MZN',
+          phone: context.customerPhone,
+          reference: context.orderReference,
+          description: `Soul2Soul order ${context.orderReference}`,
+          callbackUrl: process.env.MPESA_CALLBACK_URL,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          status: 'Manual Review',
+          reference: context.orderReference,
+          providerData: JSON.stringify(payload),
+          message:
+            'M-Pesa request could not be started automatically. The order was saved for manual follow-up.',
+        };
+      }
+
+      return {
+        status: 'Pending',
+        reference:
+          payload.transactionReference ||
+          payload.conversationId ||
+          payload.reference ||
+          context.orderReference,
+        providerData: JSON.stringify(payload),
+        message:
+          payload.message ||
+          'M-Pesa payment request sent. Please confirm the prompt on your phone.',
+      };
+    } catch (error) {
+      return {
+        status: 'Manual Review',
+        reference: context.orderReference,
+        providerData: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        message:
+          'M-Pesa request could not be started automatically. The order was saved for manual follow-up.',
+      };
+    }
+  }
+
+  private async postJson(url: string | undefined, payload: any) {
+    if (!url) return { skipped: true };
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: response.ok, status: response.status };
+  }
+
+  private async notifyOrder(context: StoreCheckoutContext, payment: any) {
+    const lines = context.items
+      .map(
+        (item) =>
+          `${item.quantity}x ${item.name} (${item.sku}) - ${item.unitPrice}`,
+      )
+      .join('\n');
+    const message = [
+      `Nova encomenda Soul2Soul: ${context.orderReference}`,
+      `Cliente: ${context.customerName}`,
+      `Telefone: ${context.customerPhone || '-'}`,
+      `Email: ${context.customerEmail || '-'}`,
+      `Total: ${context.amount} MZN`,
+      `Pagamento: ${context.paymentMethod} (${payment.status})`,
+      `Entrega: ${context.deliveryAddress || '-'}`,
+      `Produtos:\n${lines}`,
+      context.notes ? `Notas: ${context.notes}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const [siteHook, emailHook, whatsappHook] = await Promise.all([
+      this.postJson(process.env.STORE_NOTIFICATION_WEBHOOK_URL, {
+        type: 'online-order',
+        ...context,
+        payment,
+      }),
+      this.postJson(process.env.STORE_EMAIL_WEBHOOK_URL, {
+        to: process.env.STORE_NOTIFICATION_EMAIL_TO,
+        subject: `Nova encomenda ${context.orderReference}`,
+        message,
+        order: context,
+        payment,
+      }),
+      this.postJson(process.env.STORE_WHATSAPP_WEBHOOK_URL, {
+        to: process.env.STORE_NOTIFICATION_WHATSAPP_TO,
+        message,
+        order: context,
+        payment,
+      }),
+    ]);
+
+    return { siteHook, emailHook, whatsappHook };
   }
 
   private async getStoreWarehouse() {
@@ -70,6 +225,8 @@ export class OnlineStoreService {
         name: row.product.name,
         category: row.product.category,
         description: row.product.description,
+        imageUrl: this.buildProductImage(row.product),
+        storeFeatured: row.product.storeFeatured,
         unit: row.product.unit,
         sellingPrice: row.product.sellingPrice,
         availableStock: row.quantity,
@@ -114,19 +271,66 @@ export class OnlineStoreService {
     }
 
     const orderReference = `WEB-${Date.now().toString(36).toUpperCase()}`;
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: cleanItems.map((item) => item.productId) } },
+    });
+    const storeItems = cleanItems.map((item) => {
+      const product = products.find((entry) => entry.id === item.productId);
+      if (!product) {
+        throw new BadRequestException(`Product ID ${item.productId} not found.`);
+      }
+      return {
+        name: product.name,
+        sku: product.sku,
+        quantity: item.quantity,
+        unitPrice: product.sellingPrice,
+      };
+    });
+    const amount = storeItems.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0,
+    );
+    const checkoutContext: StoreCheckoutContext = {
+      orderReference,
+      customerName,
+      customerPhone,
+      customerEmail,
+      deliveryAddress,
+      notes,
+      paymentMethod,
+      amount,
+      items: storeItems,
+    };
+    const payment = await this.initiateMpesaPayment(checkoutContext);
     const saleResult = await this.salesService.processSale({
       customerName,
       customerPhone: customerPhone || undefined,
       customerEmail: customerEmail || undefined,
+      deliveryAddress: deliveryAddress || undefined,
       customerCode: customerCode || undefined,
       saveCustomer: true,
-      paymentMethod: `${paymentMethod} - Pending Confirmation`,
+      paymentMethod: paymentMethod,
+      paymentStatus: payment.status,
+      paymentReference: payment.reference,
+      paymentProviderData: payment.providerData,
+      notificationStatus: 'Pending',
       amountPaid: 0,
       warehouseId: warehouse.id,
       channel: 'Online',
       orderReference,
       fulfillmentStatus: 'Pending Payment',
       items: cleanItems,
+    });
+
+    const notificationResult = await this.notifyOrder(checkoutContext, payment);
+    const notificationStatus = Object.values(notificationResult).some(
+      (result: any) => result?.ok,
+    )
+      ? 'Sent'
+      : 'Pending';
+    await this.prisma.sale.update({
+      where: { id: saleResult.saleId },
+      data: { notificationStatus },
     });
 
     await this.prisma.auditLog.create({
@@ -144,6 +348,8 @@ export class OnlineStoreService {
           deliveryAddress,
           notes,
           paymentMethod,
+          payment,
+          notificationResult,
           itemCount: cleanItems.length,
         }),
         statusCode: 201,
@@ -155,8 +361,60 @@ export class OnlineStoreService {
       orderReference,
       saleId: saleResult.saleId,
       status: 'Pending Payment',
-      message:
-        'Order received. Soul2Soul will confirm payment and delivery by phone or WhatsApp.',
+      payment,
+      message: payment.message,
     };
+  }
+
+  async handleMpesaCallback(data: any) {
+    const reference = this.cleanText(
+      data?.reference ||
+        data?.orderReference ||
+        data?.transactionReference ||
+        data?.input_ThirdPartyReference,
+    );
+    if (!reference) {
+      throw new BadRequestException('Payment reference is required.');
+    }
+
+    const success =
+      data?.success === true ||
+      ['success', 'completed', 'paid', '0'].includes(
+        String(data?.status || data?.resultCode || data?.code || '').toLowerCase(),
+      );
+    const sale = await this.prisma.sale.findFirst({
+      where: {
+        OR: [{ orderReference: reference }, { paymentReference: reference }],
+      },
+    });
+
+    if (!sale) {
+      throw new BadRequestException('Order not found for payment callback.');
+    }
+
+    const updated = await this.prisma.sale.update({
+      where: { id: sale.id },
+      data: {
+        paymentStatus: success ? 'Paid' : 'Failed',
+        amountPaid: success ? sale.totalRevenue : sale.amountPaid,
+        paymentReference: reference,
+        paymentProviderData: JSON.stringify(data),
+        fulfillmentStatus: success ? 'Pending' : sale.fulfillmentStatus,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        action: success ? 'MPESA_PAYMENT_CONFIRMED' : 'MPESA_PAYMENT_FAILED',
+        entityType: 'sale',
+        entityId: String(sale.id),
+        method: 'POST',
+        path: '/api/store/mpesa/callback',
+        metadata: JSON.stringify(data),
+        statusCode: 200,
+      },
+    });
+
+    return { success: true, saleId: updated.id, paymentStatus: updated.paymentStatus };
   }
 }
