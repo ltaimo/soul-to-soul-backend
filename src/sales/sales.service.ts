@@ -105,6 +105,7 @@ export class SalesService {
       const fulfillmentStatus = [
         'Delivered',
         'Pending',
+        'Pending Payment',
         'In Transit',
         'Pickup',
       ].includes(data.fulfillmentStatus || '')
@@ -285,12 +286,16 @@ export class SalesService {
       const amountPaid = payingWithPoints
         ? 0
         : Number(data.amountPaid ?? totalRevenue);
-      if (amountPaid < totalRevenue) {
+      const allowsPendingPayment =
+        saleChannel === 'Online' &&
+        (fulfillmentStatus === 'Pending Payment' ||
+          paymentMethod.toLowerCase().includes('pending'));
+      if (!allowsPendingPayment && amountPaid < totalRevenue) {
         throw new BadRequestException(
           'Amount paid cannot be lower than the sale total.',
         );
       }
-      const changeGiven = amountPaid - totalRevenue;
+      const changeGiven = Math.max(0, amountPaid - totalRevenue);
       const seller = data.sellerId
         ? await tx.user.findUnique({
             where: { id: data.sellerId },
