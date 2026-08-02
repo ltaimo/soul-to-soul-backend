@@ -120,12 +120,19 @@ export class OnlineStoreService {
 
   private async postJson(url: string | undefined, payload: any) {
     if (!url) return { skipped: true };
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return { ok: response.ok, status: response.status };
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return { ok: response.ok, status: response.status };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   private async notifyOrder(context: StoreCheckoutContext, payment: any) {
