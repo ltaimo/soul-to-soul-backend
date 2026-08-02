@@ -88,6 +88,7 @@ export class SalesService {
     orderReference?: string;
     fulfillmentStatus?: string;
     customerCode?: string;
+    allowUnknownCustomerCode?: boolean;
     redeemPoints?: boolean;
     items: { productId: number; quantity: number }[];
   }) {
@@ -144,14 +145,19 @@ export class SalesService {
             ],
           },
         });
-        if (!customer)
+        if (!customer && !data.allowUnknownCustomerCode)
           throw new BadRequestException('Customer code not found.');
-      } else if (data.customerId) {
+      }
+
+      if (!customer && data.customerId) {
         customer = await tx.customer.findUnique({
           where: { id: data.customerId },
         });
         if (!customer) throw new BadRequestException('Customer not found.');
-      } else if (
+      }
+
+      if (
+        !customer &&
         data.saveCustomer &&
         data.customerName &&
         data.customerName !== 'Retail Customer'

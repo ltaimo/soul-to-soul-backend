@@ -308,6 +308,7 @@ export class OnlineStoreService {
       customerEmail: customerEmail || undefined,
       deliveryAddress: deliveryAddress || undefined,
       customerCode: customerCode || undefined,
+      allowUnknownCustomerCode: true,
       saveCustomer: true,
       paymentMethod: paymentMethod,
       paymentStatus: payment.status,
