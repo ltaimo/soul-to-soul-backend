@@ -67,4 +67,37 @@ export class AuthService {
       },
     };
   }
+
+  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+    if (!currentPassword || !newPassword) {
+      throw new UnauthorizedException('Current and new password are required');
+    }
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('New password must be at least 6 characters');
+    }
+    if (currentPassword === newPassword) {
+      throw new UnauthorizedException('New password must be different from the temporary password');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status === 'inactive') {
+      throw new UnauthorizedException('Account is not available');
+    }
+
+    const passwordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+        mustChangePassword: false,
+      },
+    });
+
+    const { passwordHash: _passwordHash, ...safeUser } = updated;
+    return this.login(safeUser);
+  }
 }

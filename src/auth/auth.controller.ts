@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, Req, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
 
@@ -15,5 +15,14 @@ export class AuthController {
     }
     const user = await this.authService.validateUser(identifier, body.password);
     return this.authService.login(user);
+  }
+
+  @Post('change-password')
+  async changePassword(@Req() req: any, @Body() body: any) {
+    return this.authService.changePassword(
+      req.user.id,
+      body.currentPassword,
+      body.newPassword,
+    );
   }
 }
