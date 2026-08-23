@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Req, Param, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Get, Req, Param, Patch, Query, Header } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { Roles } from '../auth/roles.decorator';
 
@@ -68,6 +68,17 @@ export class SalesController {
   @Roles('manager', 'cashier', 'salesperson', 'staff')
   async getSales() {
     return this.salesService.getRecentSales();
+  }
+
+  @Get('report')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  @Roles('manager')
+  async getSalesReport(
+    @Query('period') period: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+  ) {
+    return this.salesService.getSalesReport({ period, start, end });
   }
 
   @Patch(':id/cancel')

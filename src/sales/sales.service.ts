@@ -26,6 +26,52 @@ const saleStatusFromPayment = (paymentStatus: string, fulfillmentStatus: string)
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
+  private getPeriodRange(period = 'today', start?: string, end?: string) {
+    if (period === 'all') return null;
+
+    const maputoOffsetMs = 2 * 60 * 60 * 1000;
+    const now = new Date(Date.now() + maputoOffsetMs);
+    const local = new Date(now.toISOString().slice(0, 10) + 'T00:00:00.000Z');
+    const day = local.getUTCDay() || 7;
+    let from = new Date(local);
+    let to = new Date(local);
+    to.setUTCDate(to.getUTCDate() + 1);
+
+    if (period === 'yesterday') {
+      from.setUTCDate(from.getUTCDate() - 1);
+      to.setUTCDate(to.getUTCDate() - 1);
+    } else if (period === 'this_week') {
+      from.setUTCDate(from.getUTCDate() - day + 1);
+      to = new Date(from);
+      to.setUTCDate(to.getUTCDate() + 7);
+    } else if (period === 'last_week') {
+      from.setUTCDate(from.getUTCDate() - day - 6);
+      to = new Date(from);
+      to.setUTCDate(to.getUTCDate() + 7);
+    } else if (period === 'this_month') {
+      from = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1));
+      to = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 1));
+    } else if (period === 'last_month') {
+      from = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() - 1, 1));
+      to = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1));
+    } else if (period === 'this_year') {
+      from = new Date(Date.UTC(local.getUTCFullYear(), 0, 1));
+      to = new Date(Date.UTC(local.getUTCFullYear() + 1, 0, 1));
+    } else if (period === 'last_year') {
+      from = new Date(Date.UTC(local.getUTCFullYear() - 1, 0, 1));
+      to = new Date(Date.UTC(local.getUTCFullYear(), 0, 1));
+    } else if (period === 'custom' && start && end) {
+      from = new Date(`${start}T00:00:00.000Z`);
+      to = new Date(`${end}T00:00:00.000Z`);
+      to.setUTCDate(to.getUTCDate() + 1);
+    }
+
+    return {
+      from: new Date(from.getTime() - maputoOffsetMs),
+      to: new Date(to.getTime() - maputoOffsetMs),
+    };
+  }
+
   private async getLoyaltyConfig(tx: any) {
     return tx.loyaltyProgramConfig.upsert({
       where: { id: 1 },
@@ -666,5 +712,71 @@ export class SalesService {
         items: { include: { product: true } },
       },
     });
+  }
+
+  async getSalesReport(filters: { period?: string; start?: string; end?: string }) {
+    const range = this.getPeriodRange(filters.period || 'today', filters.start, filters.end);
+    const sales = await this.prisma.sale.findMany({
+      where: range ? { date: { gte: range.from, lt: range.to } } : {},
+      orderBy: { date: 'asc' },
+      include: {
+        warehouse: true,
+        commercialPartner: true,
+        payments: true,
+        items: { include: { product: true } },
+      },
+    });
+
+    const summary = sales.reduce(
+      (acc, sale: any) => {
+        const revenue = Number(sale.totalRevenue) || 0;
+        const cogs = Number(sale.totalCogs) || 0;
+        const delivery = ((sale.deliveryFeeCents || 0) / 100) || 0;
+        const paid = Number(sale.amountPaid) || 0;
+
+        acc.saleCount += 1;
+        acc.units += sale.items.reduce((sum, item) => sum + item.quantity, 0);
+        acc.totalRevenue += revenue;
+        acc.totalCogs += cogs;
+        acc.grossProfit += revenue - cogs;
+        acc.deliveryFees += delivery;
+        acc.amountPaid += paid;
+        acc.pointsEarned += sale.pointsEarned || 0;
+        acc.pointsRedeemed += sale.pointsRedeemed || 0;
+        if (['PAID', 'DELIVERED'].includes(sale.status || '')) acc.paidSaleCount += 1;
+        if (sale.status === 'PENDING') acc.pendingSaleCount += 1;
+        if (sale.status === 'CANCELLED') acc.cancelledSaleCount += 1;
+        return acc;
+      },
+      {
+        saleCount: 0,
+        paidSaleCount: 0,
+        pendingSaleCount: 0,
+        cancelledSaleCount: 0,
+        units: 0,
+        totalRevenue: 0,
+        totalCogs: 0,
+        grossProfit: 0,
+        deliveryFees: 0,
+        amountPaid: 0,
+        pointsEarned: 0,
+        pointsRedeemed: 0,
+      },
+    );
+
+    return {
+      period: {
+        key: filters.period || 'today',
+        from: range?.from || null,
+        to: range?.to || null,
+        timezone: 'Africa/Maputo',
+      },
+      summary: {
+        ...summary,
+        averageTicket: summary.saleCount ? summary.totalRevenue / summary.saleCount : 0,
+        grossMargin: summary.totalRevenue ? (summary.grossProfit / summary.totalRevenue) * 100 : 0,
+      },
+      sales,
+    };
   }
 }
