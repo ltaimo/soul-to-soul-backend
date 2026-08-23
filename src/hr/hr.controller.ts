@@ -56,8 +56,8 @@ export class HrController {
   }
 
   @Get('attendance')
-  async getAttendance() {
-    return this.hrService.getAttendance();
+  async getAttendance(@Query('month') month?: string) {
+    return this.hrService.getAttendance(month);
   }
 
   @Post('attendance')

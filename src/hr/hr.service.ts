@@ -206,11 +206,13 @@ export class HrService {
     return { success: true, goal };
   }
 
-  async getAttendance() {
+  async getAttendance(month?: string) {
+    const range = month ? this.monthRange(month) : null;
     return this.prisma.attendanceRecord.findMany({
-      orderBy: [{ date: 'desc' }, { employee: { fullName: 'asc' } }],
+      where: range ? { date: { gte: range.from, lt: range.to } } : {},
+      orderBy: [{ date: range ? 'asc' : 'desc' }, { employee: { fullName: 'asc' } }],
       include: { employee: true },
-      take: 120,
+      take: range ? undefined : 120,
     });
   }
 
@@ -386,6 +388,15 @@ export class HrService {
     if (value && /^\d{4}-\d{2}$/.test(value)) return value;
     const now = new Date();
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+
+  private monthRange(value?: string) {
+    const key = this.monthKey(value);
+    const [year, month] = key.split('-').map(Number);
+    return {
+      from: new Date(Date.UTC(year, month - 1, 1)),
+      to: new Date(Date.UTC(year, month, 1)),
+    };
   }
 
   private expandPaymentSchedule(data: any) {
