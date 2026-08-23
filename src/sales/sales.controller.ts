@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Req } from '@nestjs/common';
+import { Controller, Post, Body, Get, Req, Param, Patch } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { Roles } from '../auth/roles.decorator';
 
@@ -21,6 +21,10 @@ export class SalesController {
     @Body('paymentStatus') paymentStatus: string,
     @Body('paymentReference') paymentReference: string,
     @Body('amountPaid') amountPaid: number,
+    @Body('deliveryFee') deliveryFee: number,
+    @Body('payments') payments: { method: string; amount: number; reference?: string }[],
+    @Body('pointsToRedeem') pointsToRedeem: number,
+    @Body('idempotencyKey') idempotencyKey: string,
     @Body('warehouseId') warehouseId: number,
     @Body('commercialPartnerId') commercialPartnerId: number,
     @Body('channel') channel: string,
@@ -41,6 +45,10 @@ export class SalesController {
       paymentStatus,
       paymentReference,
       amountPaid,
+      deliveryFee,
+      payments,
+      pointsToRedeem: pointsToRedeem ? Number(pointsToRedeem) : undefined,
+      idempotencyKey,
       warehouseId: warehouseId ? Number(warehouseId) : undefined,
       commercialPartnerId: commercialPartnerId
         ? Number(commercialPartnerId)
@@ -51,6 +59,7 @@ export class SalesController {
       redeemPoints,
       sellerId: req.user?.id,
       sellerName: req.user?.fullName || req.user?.email,
+      user: req.user,
       items,
     });
   }
@@ -59,5 +68,11 @@ export class SalesController {
   @Roles('manager', 'cashier', 'salesperson', 'staff')
   async getSales() {
     return this.salesService.getRecentSales();
+  }
+
+  @Patch(':id/cancel')
+  @Roles('manager')
+  async cancelSale(@Req() req: any, @Param('id') id: string) {
+    return this.salesService.cancelSale(Number(id), req.user);
   }
 }

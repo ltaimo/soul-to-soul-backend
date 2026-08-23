@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Req } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { Roles } from '../auth/roles.decorator';
 
@@ -31,5 +31,17 @@ export class CustomersController {
     @Body('status') status: string,
   ) {
     return this.customersService.updateCustomerStatus(Number(id), status);
+  }
+
+  @Get(':id/points')
+  @Roles('manager', 'cashier', 'salesperson', 'stock_manager', 'viewer')
+  async getPointHistory(@Param('id') id: string) {
+    return this.customersService.getPointHistory(Number(id));
+  }
+
+  @Post(':id/points/adjust')
+  @Roles('manager')
+  async adjustPoints(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    return this.customersService.adjustPoints(Number(id), data, req.user);
   }
 }

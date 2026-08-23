@@ -293,4 +293,47 @@ export class SettingsService {
 
     return { success: true, settings: this.normalize(settings) };
   }
+
+  async getLoyaltyConfig() {
+    return this.prisma.loyaltyProgramConfig.upsert({
+      where: { id: 1 },
+      update: {},
+      create: {
+        id: 1,
+        earnRateCents: 20000,
+        redeemRateCents: 1000,
+        allowPointsCash: true,
+        roundingMode: 'FLOOR',
+        weekStartsOn: 'MONDAY',
+      },
+    });
+  }
+
+  async updateLoyaltyConfig(data: any) {
+    const earnRateCents = Math.max(1, Math.round((Number(data.earnRate) || Number(data.earnRateMt) || 200) * 100));
+    const redeemRateCents = Math.max(1, Math.round((Number(data.redeemRate) || Number(data.redeemRateMt) || 10) * 100));
+
+    const config = await this.prisma.loyaltyProgramConfig.upsert({
+      where: { id: 1 },
+      update: {
+        earnRateCents,
+        redeemRateCents,
+        allowPointsCash: data.allowPointsCash !== false,
+        pointsExpireDays: data.pointsExpireDays ? Number(data.pointsExpireDays) : null,
+        roundingMode: data.roundingMode || 'FLOOR',
+        weekStartsOn: data.weekStartsOn || 'MONDAY',
+      },
+      create: {
+        id: 1,
+        earnRateCents,
+        redeemRateCents,
+        allowPointsCash: data.allowPointsCash !== false,
+        pointsExpireDays: data.pointsExpireDays ? Number(data.pointsExpireDays) : null,
+        roundingMode: data.roundingMode || 'FLOOR',
+        weekStartsOn: data.weekStartsOn || 'MONDAY',
+      },
+    });
+
+    return { success: true, config };
+  }
 }

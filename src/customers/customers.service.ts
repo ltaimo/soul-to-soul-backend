@@ -9,6 +9,10 @@ export class CustomersService {
     return this.prisma.customer.findMany({
       orderBy: { fullName: 'asc' },
       include: {
+        loyaltyMovements: {
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+        },
         _count: {
           select: { sales: true },
         },
@@ -65,6 +69,70 @@ export class CustomersService {
     return { success: true, customer };
   }
 
+  async getPointHistory(id: number) {
+    return this.prisma.loyaltyPointMovement.findMany({
+      where: { customerId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  async adjustPoints(
+    id: number,
+    data: { points: number; reason: string; idempotencyKey?: string },
+    user?: any,
+  ) {
+    const points = Number(data.points) || 0;
+    if (!points) throw new BadRequestException('Point adjustment cannot be zero.');
+    if (!data.reason || !data.reason.trim()) {
+      throw new BadRequestException('Adjustment reason is required.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({ where: { id } });
+      if (!customer) throw new BadRequestException('Customer not found');
+
+      const balanceBefore = customer.loyaltyPoints || 0;
+      const balanceAfter = balanceBefore + points;
+      if (balanceAfter < 0) {
+        throw new BadRequestException('Loyalty balance cannot become negative.');
+      }
+
+      const key =
+        data.idempotencyKey ||
+        `customer-${id}:admin-adjustment:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+
+      const existing = await tx.loyaltyPointMovement.findUnique({
+        where: { idempotencyKey: key },
+      });
+      if (existing) return { success: true, movement: existing, idempotent: true };
+
+      const movement = await tx.loyaltyPointMovement.create({
+        data: {
+          customerId: id,
+          movementType: 'ADMIN_ADJUSTMENT',
+          points,
+          balanceBefore,
+          balanceAfter,
+          reason: data.reason.trim(),
+          userId: user?.id || null,
+          userName: user?.fullName || user?.email || null,
+          idempotencyKey: key,
+        },
+      });
+
+      const customerUpdate = await tx.customer.update({
+        where: { id },
+        data: {
+          loyaltyPoints: balanceAfter,
+          loyaltyPointsAdjustedTotal: { increment: Math.abs(points) },
+        },
+      });
+
+      return { success: true, movement, customer: customerUpdate };
+    });
+  }
+
   private toCustomerData(data: any) {
     const discountPercent = Number(data.discountPercent) || 0;
     if (discountPercent < 0 || discountPercent > 100) {
@@ -83,10 +151,6 @@ export class CustomersService {
 
     if (data.customerCode !== undefined) {
       customerData.customerCode = data.customerCode?.trim() || null;
-    }
-
-    if (data.loyaltyPoints !== undefined) {
-      customerData.loyaltyPoints = Math.max(0, Number(data.loyaltyPoints) || 0);
     }
 
     return customerData;

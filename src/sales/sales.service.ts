@@ -1,5 +1,9 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { calculateEarnedPoints } from './loyalty-calculator';
+
+const toCents = (value: any) => Math.max(0, Math.round((Number(value) || 0) * 100));
+const fromCents = (value: number) => Number((value / 100).toFixed(2));
 
 const resolvePaymentStatus = (
   channel?: string,
@@ -12,9 +16,43 @@ const resolvePaymentStatus = (
   return 'Paid';
 };
 
+const saleStatusFromPayment = (paymentStatus: string, fulfillmentStatus: string) => {
+  if (paymentStatus === 'Paid') return fulfillmentStatus === 'Delivered' ? 'DELIVERED' : 'PAID';
+  if (paymentStatus === 'Partial') return 'PARTIALLY_PAID';
+  return 'PENDING';
+};
+
 @Injectable()
 export class SalesService {
   constructor(private prisma: PrismaService) {}
+
+  private async getLoyaltyConfig(tx: any) {
+    return tx.loyaltyProgramConfig.upsert({
+      where: { id: 1 },
+      update: {},
+      create: {
+        id: 1,
+        earnRateCents: 20000,
+        redeemRateCents: 1000,
+        allowPointsCash: true,
+        roundingMode: 'FLOOR',
+        weekStartsOn: 'MONDAY',
+      },
+    });
+  }
+
+  private rewardCost(product: any, config: any, now = new Date()) {
+    const promoApplies =
+      product.rewardPromoPoints &&
+      (!product.rewardPromoStart || product.rewardPromoStart <= now) &&
+      (!product.rewardPromoEnd || product.rewardPromoEnd >= now);
+
+    if (promoApplies) return Math.max(0, Number(product.rewardPromoPoints));
+    if (product.redemptionPointsCost > 0)
+      return Math.max(0, Number(product.redemptionPointsCost));
+
+    return Math.ceil(toCents(product.sellingPrice) / config.redeemRateCents);
+  }
 
   private async ensureDefaultWarehouse(tx: any) {
     let warehouse = await tx.warehouse.findFirst({
@@ -41,20 +79,14 @@ export class SalesService {
 
   private async getWarehouse(tx: any, warehouseId?: number) {
     if (!warehouseId) return this.ensureDefaultWarehouse(tx);
-    const warehouse = await tx.warehouse.findUnique({
-      where: { id: warehouseId },
-    });
+    const warehouse = await tx.warehouse.findUnique({ where: { id: warehouseId } });
     if (!warehouse) throw new BadRequestException('Warehouse not found.');
     if (warehouse.status === 'Inactive')
       throw new BadRequestException('Warehouse is inactive.');
     return warehouse;
   }
 
-  private async ensureWarehouseStock(
-    tx: any,
-    warehouseId: number,
-    product: any,
-  ) {
+  private async ensureWarehouseStock(tx: any, warehouseId: number, product: any) {
     return tx.warehouseStock.upsert({
       where: { warehouseId_productId: { warehouseId, productId: product.id } },
       update: {},
@@ -65,6 +97,68 @@ export class SalesService {
         minStock: product.minStock || 0,
       },
     });
+  }
+
+  private async addMovement(
+    tx: any,
+    customer: any,
+    data: {
+      saleId?: number;
+      movementType: string;
+      points: number;
+      reason: string;
+      idempotencyKey: string;
+      user?: any;
+      metadata?: any;
+    },
+  ) {
+    const existing = await tx.loyaltyPointMovement.findUnique({
+      where: { idempotencyKey: data.idempotencyKey },
+    });
+    if (existing) return existing;
+
+    const balanceBefore = customer.loyaltyPoints || 0;
+    const balanceAfter = balanceBefore + data.points;
+    if (balanceAfter < 0) {
+      throw new BadRequestException('Loyalty balance cannot become negative.');
+    }
+
+    const totals: any = {};
+    if (data.movementType === 'EARN' || data.movementType === 'BONUS') {
+      totals.loyaltyPointsEarnedTotal = { increment: Math.max(0, data.points) };
+    }
+    if (data.movementType === 'REDEEM') {
+      totals.loyaltyPointsRedeemedTotal = { increment: Math.abs(data.points) };
+    }
+    if (data.movementType === 'EXPIRATION') {
+      totals.loyaltyPointsExpiredTotal = { increment: Math.abs(data.points) };
+    }
+    if (data.movementType === 'ADMIN_ADJUSTMENT') {
+      totals.loyaltyPointsAdjustedTotal = { increment: Math.abs(data.points) };
+    }
+
+    const movement = await tx.loyaltyPointMovement.create({
+      data: {
+        customerId: customer.id,
+        saleId: data.saleId || null,
+        movementType: data.movementType,
+        points: data.points,
+        balanceBefore,
+        balanceAfter,
+        reason: data.reason,
+        userId: data.user?.id || null,
+        userName: data.user?.fullName || data.user?.email || null,
+        idempotencyKey: data.idempotencyKey,
+        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+      },
+    });
+
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: { loyaltyPoints: balanceAfter, ...totals },
+    });
+
+    return movement;
   }
 
   async processSale(data: {
@@ -80,6 +174,9 @@ export class SalesService {
     paymentProviderData?: string;
     notificationStatus?: string;
     amountPaid?: number;
+    deliveryFee?: number;
+    payments?: { method: string; amount: number; reference?: string }[];
+    pointsToRedeem?: number;
     sellerId?: number;
     sellerName?: string;
     commercialPartnerId?: number;
@@ -90,6 +187,8 @@ export class SalesService {
     customerCode?: string;
     allowUnknownCustomerCode?: boolean;
     redeemPoints?: boolean;
+    idempotencyKey?: string;
+    user?: any;
     items: { productId: number; quantity: number }[];
   }) {
     const items = data.items;
@@ -97,9 +196,20 @@ export class SalesService {
       throw new BadRequestException('A sale must contain at least one item.');
     }
 
-    // Atomic transaction for the entire sale
     return this.prisma.$transaction(async (tx) => {
-      let totalRevenue = 0;
+      if (data.idempotencyKey) {
+        const existingSale = await tx.sale.findUnique({
+          where: { idempotencyKey: data.idempotencyKey },
+          include: { items: { include: { product: true } }, payments: true },
+        });
+        if (existingSale) {
+          return { success: true, saleId: existingSale.id, sale: existingSale, idempotent: true };
+        }
+      }
+
+      const config = await this.getLoyaltyConfig(tx);
+      let grossTotalCents = 0;
+      let netTotalCents = 0;
       let totalCogs = 0;
       let customer: any = null;
       let commercialPartner: any = null;
@@ -114,20 +224,20 @@ export class SalesService {
           throw new BadRequestException('Seller or reseller is inactive.');
       }
 
-      const saleChannel = ['Store', 'Online', 'Order', 'Reseller'].includes(
+      const saleChannel: string = ['Store', 'Online', 'Order', 'Reseller', 'WhatsApp', 'Website', 'Manual'].includes(
         data.channel || '',
       )
-        ? data.channel
+        ? String(data.channel)
         : commercialPartner?.defaultSaleChannel || 'Store';
-      const fulfillmentStatus = [
+      const fulfillmentStatus: string = [
         'Delivered',
         'Pending',
         'Pending Payment',
         'In Transit',
         'Pickup',
       ].includes(data.fulfillmentStatus || '')
-        ? data.fulfillmentStatus
-        : ['Online', 'Order'].includes(saleChannel || '')
+        ? String(data.fulfillmentStatus)
+        : ['Online', 'Order', 'Website', 'WhatsApp'].includes(saleChannel || '')
           ? 'Pending'
           : 'Delivered';
       const warehouse = await this.getWarehouse(
@@ -135,14 +245,11 @@ export class SalesService {
         data.warehouseId || commercialPartner?.warehouseId,
       );
 
-      if (data.customerCode && !data.customerId) {
+      const identity = data.customerCode?.trim();
+      if (identity && !data.customerId) {
         customer = await tx.customer.findFirst({
           where: {
-            OR: [
-              { customerCode: data.customerCode.trim() },
-              { phone: data.customerCode.trim() },
-              { email: data.customerCode.trim() },
-            ],
+            OR: [{ customerCode: identity }, { phone: identity }, { email: identity }],
           },
         });
         if (!customer && !data.allowUnknownCustomerCode)
@@ -150,9 +257,7 @@ export class SalesService {
       }
 
       if (!customer && data.customerId) {
-        customer = await tx.customer.findUnique({
-          where: { id: data.customerId },
-        });
+        customer = await tx.customer.findUnique({ where: { id: data.customerId } });
         if (!customer) throw new BadRequestException('Customer not found.');
       }
 
@@ -163,13 +268,9 @@ export class SalesService {
         data.customerName !== 'Retail Customer'
       ) {
         const existingCustomer = data.customerEmail
-          ? await tx.customer.findFirst({
-              where: { email: data.customerEmail },
-            })
+          ? await tx.customer.findFirst({ where: { email: data.customerEmail } })
           : data.customerPhone
-            ? await tx.customer.findFirst({
-                where: { phone: data.customerPhone },
-              })
+            ? await tx.customer.findFirst({ where: { phone: data.customerPhone } })
             : null;
 
         customer =
@@ -185,92 +286,74 @@ export class SalesService {
         if (!customer.customerCode) {
           customer = await tx.customer.update({
             where: { id: customer.id },
-            data: {
-              customerCode: `CUST-${String(customer.id).padStart(5, '0')}`,
-            },
+            data: { customerCode: `CUST-${String(customer.id).padStart(5, '0')}` },
           });
         }
       }
 
       const saleItemsToCreate: any[] = [];
-      let pointsEarned = 0;
-      let pointsRedeemed = 0;
+      const rewardLines: Array<{ index: number; maxPoints: number; netLineCents: number }> = [];
 
-      for (const item of items) {
+      for (const [index, item] of items.entries()) {
         if (item.quantity <= 0) {
           throw new BadRequestException(
             `Quantity for product ${item.productId} must be positive.`,
           );
         }
 
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
-        });
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!product) throw new BadRequestException(`Product ID ${item.productId} not found.`);
 
-        if (!product) {
-          throw new BadRequestException(
-            `Product ID ${item.productId} not found.`,
-          );
-        }
-
-        const warehouseStock = await this.ensureWarehouseStock(
-          tx,
-          warehouse.id,
-          product,
-        );
-
+        const warehouseStock = await this.ensureWarehouseStock(tx, warehouse.id, product);
         if (warehouseStock.quantity < item.quantity) {
           throw new BadRequestException(
             `Insufficient stock for ${product.name} in ${warehouse.name}. Needed: ${item.quantity}, Available: ${warehouseStock.quantity}`,
           );
         }
-
         if (product.stock < item.quantity) {
           throw new BadRequestException(
             `Insufficient consolidated stock for ${product.name}. Needed: ${item.quantity}, Available: ${product.stock}`,
           );
         }
 
-        // Calculate line financial metrics based on LOCKED selling and cost price
-        const discountRate = customer?.discountPercent
-          ? customer.discountPercent / 100
-          : 0;
-        const unitSellingPrice = product.sellingPrice * (1 - discountRate);
-        const lineRevenue = item.quantity * unitSellingPrice;
+        const discountRate = customer?.discountPercent ? customer.discountPercent / 100 : 0;
+        const grossLineCents = toCents(product.sellingPrice * item.quantity);
+        const discountCents = Math.round(grossLineCents * discountRate);
+        const netLineCents = Math.max(0, grossLineCents - discountCents);
         const lineCogs = item.quantity * product.costPrice;
+        const lineRewardCost =
+          product.rewardEligible !== false && product.rewardActive !== false
+            ? this.rewardCost(product, config) * item.quantity
+            : 0;
 
-        totalRevenue += lineRevenue;
+        grossTotalCents += grossLineCents;
+        netTotalCents += netLineCents;
         totalCogs += lineCogs;
 
         saleItemsToCreate.push({
           productId: product.id,
           quantity: item.quantity,
-          unitSellingPrice,
+          unitSellingPrice: fromCents(Math.round(netLineCents / item.quantity)),
           unitCogs: product.costPrice,
-          loyaltyPointsEarned: product.loyaltyPointsEarned * item.quantity,
-          redemptionPointsCost: product.redemptionPointsCost * item.quantity,
+          loyaltyPointsEarned: 0,
+          redemptionPointsCost: lineRewardCost,
+          grossLineCents,
+          discountCents,
+          netLineCents,
+          pointsRedeemed: 0,
+          pointsValueCents: 0,
+          eligiblePaidCents: netLineCents,
         });
+        rewardLines.push({ index, maxPoints: lineRewardCost, netLineCents });
 
-        pointsEarned += product.loyaltyPointsEarned * item.quantity;
-        pointsRedeemed += product.redemptionPointsCost * item.quantity;
-
-        // 1. Deduct Product Stock
         await tx.product.update({
           where: { id: product.id },
           data: { stock: { decrement: item.quantity } },
         });
-
         await tx.warehouseStock.update({
-          where: {
-            warehouseId_productId: {
-              warehouseId: warehouse.id,
-              productId: product.id,
-            },
-          },
+          where: { warehouseId_productId: { warehouseId: warehouse.id, productId: product.id } },
           data: { quantity: { decrement: item.quantity } },
         });
-
-        // 2. Log StockMovement
         await tx.stockMovement.create({
           data: {
             productId: product.id,
@@ -285,44 +368,89 @@ export class SalesService {
         });
       }
 
-      const paymentMethod = data.paymentMethod || 'Cash';
-      const paymentStatus = ['Paid', 'Pending', 'Failed', 'Manual Review'].includes(
-        data.paymentStatus || '',
-      )
-        ? data.paymentStatus
-        : resolvePaymentStatus(saleChannel, fulfillmentStatus, paymentMethod);
-      const payingWithPoints = data.redeemPoints || paymentMethod === 'Points';
-      if (payingWithPoints) {
-        if (!customer)
-          throw new BadRequestException(
-            'A loyal customer is required to pay with points.',
-          );
-        if (pointsRedeemed <= 0)
-          throw new BadRequestException(
-            'One or more products do not have redemption points configured.',
-          );
-        if ((customer.loyaltyPoints || 0) < pointsRedeemed) {
-          throw new BadRequestException(
-            `Insufficient loyalty points. Needed: ${pointsRedeemed}, Available: ${customer.loyaltyPoints || 0}`,
-          );
+      const requestedPoints = Math.max(0, Number(data.pointsToRedeem) || 0);
+      const paymentMethod = data.paymentMethod || (requestedPoints > 0 ? 'Mixed' : 'Cash');
+      const wantsPoints = Boolean(data.redeemPoints || requestedPoints > 0 || paymentMethod === 'Points');
+      let pointsRedeemed = 0;
+      let pointsValueCents = 0;
+      if (wantsPoints) {
+        if (!customer) {
+          throw new BadRequestException('A loyal customer is required to redeem points.');
         }
-        totalRevenue = 0;
-        pointsEarned = 0;
+        const maxConfiguredPoints = rewardLines.reduce((sum, line) => sum + line.maxPoints, 0);
+        if (maxConfiguredPoints <= 0) {
+          throw new BadRequestException('No selected products are eligible for point redemption.');
+        }
+        const desiredPoints =
+          requestedPoints > 0
+            ? requestedPoints
+            : paymentMethod === 'Points'
+              ? maxConfiguredPoints
+              : Math.min(customer.loyaltyPoints || 0, maxConfiguredPoints);
+        pointsRedeemed = Math.min(desiredPoints, maxConfiguredPoints, customer.loyaltyPoints || 0);
+        pointsValueCents = Math.min(netTotalCents, pointsRedeemed * config.redeemRateCents);
+        if (pointsRedeemed <= 0) {
+          throw new BadRequestException('Customer does not have points available for redemption.');
+        }
+        if (paymentMethod === 'Points' && pointsValueCents < netTotalCents && !config.allowPointsCash) {
+          throw new BadRequestException('Points plus cash is disabled.');
+        }
       }
 
-      const amountPaid = payingWithPoints
-        ? 0
-        : Number(data.amountPaid ?? totalRevenue);
-      const allowsPendingPayment =
-        saleChannel === 'Online' &&
-        (fulfillmentStatus === 'Pending Payment' ||
-          paymentMethod.toLowerCase().includes('pending'));
-      if (!allowsPendingPayment && amountPaid < totalRevenue) {
-        throw new BadRequestException(
-          'Amount paid cannot be lower than the sale total.',
+      let remainingPointValue = pointsValueCents;
+      for (const line of rewardLines) {
+        if (remainingPointValue <= 0) break;
+        const linePoints = Math.min(
+          saleItemsToCreate[line.index].redemptionPointsCost,
+          Math.floor(Math.min(remainingPointValue, line.netLineCents) / config.redeemRateCents),
         );
+        const lineValue = linePoints * config.redeemRateCents;
+        saleItemsToCreate[line.index].pointsRedeemed = linePoints;
+        saleItemsToCreate[line.index].pointsValueCents = lineValue;
+        saleItemsToCreate[line.index].eligiblePaidCents = Math.max(0, line.netLineCents - lineValue);
+        remainingPointValue -= lineValue;
       }
-      const changeGiven = Math.max(0, amountPaid - totalRevenue);
+
+      const deliveryFeeCents = toCents(data.deliveryFee);
+      const payableCents = Math.max(0, netTotalCents - pointsValueCents + deliveryFeeCents);
+      const cashPayments =
+        Array.isArray(data.payments) && data.payments.length
+          ? data.payments.map((payment) => ({
+              method: payment.method || 'Cash',
+              amountCents: toCents(payment.amount),
+              reference: payment.reference || null,
+            }))
+          : [
+              {
+                method: paymentMethod === 'Points' ? 'Cash' : paymentMethod,
+                amountCents: toCents(data.amountPaid ?? payableCents / 100),
+                reference: data.paymentReference || null,
+              },
+            ];
+      const amountPaidCents = cashPayments.reduce((sum, payment) => sum + payment.amountCents, 0);
+      const paymentStatus: string = ['Paid', 'Pending', 'Failed', 'Manual Review', 'Partial'].includes(
+        data.paymentStatus || '',
+      )
+        ? String(data.paymentStatus)
+        : resolvePaymentStatus(saleChannel, fulfillmentStatus, paymentMethod);
+      const allowsPendingPayment =
+        paymentStatus !== 'Paid' ||
+        (saleChannel === 'Online' &&
+          (fulfillmentStatus === 'Pending Payment' || paymentMethod.toLowerCase().includes('pending')));
+      if (!allowsPendingPayment && amountPaidCents < payableCents) {
+        throw new BadRequestException('Amount paid cannot be lower than the sale total.');
+      }
+      const changeGivenCents = Math.max(0, amountPaidCents - payableCents);
+      const eligiblePaidCents = paymentStatus === 'Paid' ? Math.max(0, netTotalCents - pointsValueCents) : 0;
+      const priorResidual = customer?.loyaltyResidualCents || 0;
+      const earned = calculateEarnedPoints(
+        customer ? eligiblePaidCents : 0,
+        priorResidual,
+        config.earnRateCents,
+      );
+      const pointsEarned = customer ? earned.pointsEarned : 0;
+      const newResidual = customer ? earned.newResidualCents : priorResidual;
+
       const seller = data.sellerId
         ? await tx.user.findUnique({
             where: { id: data.sellerId },
@@ -330,14 +458,14 @@ export class SalesService {
           })
         : null;
       const commissionRate = Number(commercialPartner?.commissionRate) || 0;
+      const totalRevenue = fromCents(netTotalCents - pointsValueCents);
       const commissionAmount = totalRevenue * (commissionRate / 100);
+      const status = saleStatusFromPayment(paymentStatus, fulfillmentStatus);
 
-      // 3. Create Sale Header and Items
       const sale = await tx.sale.create({
         data: {
           customerId: customer?.id || null,
-          customerName:
-            customer?.fullName || data.customerName || 'Retail Customer',
+          customerName: customer?.fullName || data.customerName || 'Retail Customer',
           customerEmail: customer?.email || data.customerEmail || null,
           customerPhone: customer?.phone || data.customerPhone || null,
           deliveryAddress: data.deliveryAddress?.trim() || null,
@@ -362,43 +490,168 @@ export class SalesService {
           paymentReference: data.paymentReference?.trim() || null,
           paymentProviderData: data.paymentProviderData || null,
           notificationStatus: data.notificationStatus || 'Not Required',
-          amountPaid,
-          changeGiven,
+          amountPaid: fromCents(amountPaidCents),
+          amountPaidCents,
+          changeGiven: fromCents(changeGivenCents),
+          changeGivenCents,
+          discountCents: grossTotalCents - netTotalCents,
+          deliveryFeeCents,
+          grossTotalCents,
+          netTotalCents,
+          eligiblePaidCents,
+          pointsValueCents,
+          idempotencyKey: data.idempotencyKey || null,
+          status,
           pointsEarned,
-          pointsRedeemed: payingWithPoints ? pointsRedeemed : 0,
+          pointsRedeemed,
           totalRevenue,
           totalCogs,
-          items: {
-            create: saleItemsToCreate,
+          items: { create: saleItemsToCreate },
+          payments: {
+            create: cashPayments
+              .filter((payment) => payment.amountCents > 0)
+              .map((payment, index) => ({
+                method: payment.method,
+                amountCents: payment.amountCents,
+                reference: payment.reference,
+                providerData: index === 0 ? data.paymentProviderData || null : null,
+                status: paymentStatus === 'Paid' ? 'PAID' : paymentStatus.toUpperCase(),
+                idempotencyKey: data.idempotencyKey ? `${data.idempotencyKey}:payment:${index}` : null,
+              })),
           },
         },
         include: {
           warehouse: true,
           commercialPartner: true,
           items: { include: { product: true } },
+          payments: true,
         },
       });
 
       if (customer) {
+        let currentCustomer = customer;
+        if (pointsRedeemed > 0) {
+          const updated = await tx.customer.updateMany({
+            where: { id: customer.id, loyaltyPoints: { gte: pointsRedeemed } },
+            data: { loyaltyPoints: { decrement: pointsRedeemed } },
+          });
+          if (updated.count !== 1) {
+            throw new BadRequestException('Insufficient loyalty points.');
+          }
+          currentCustomer = await tx.customer.findUnique({ where: { id: customer.id } });
+          await tx.loyaltyPointMovement.create({
+            data: {
+              customerId: customer.id,
+              saleId: sale.id,
+              movementType: 'REDEEM',
+              points: -pointsRedeemed,
+              balanceBefore: customer.loyaltyPoints || 0,
+              balanceAfter: currentCustomer.loyaltyPoints || 0,
+              reason: `Sale #${sale.id} redemption`,
+              userId: data.user?.id || null,
+              userName: data.user?.fullName || data.user?.email || null,
+              idempotencyKey: `${data.idempotencyKey || `sale-${sale.id}`}:redeem`,
+              metadata: JSON.stringify({ pointsValueCents }),
+            },
+          });
+          await tx.customer.update({
+            where: { id: customer.id },
+            data: { loyaltyPointsRedeemedTotal: { increment: pointsRedeemed } },
+          });
+        }
+
+        currentCustomer = await tx.customer.findUnique({ where: { id: customer.id } });
+        if (pointsEarned > 0) {
+          await this.addMovement(tx, currentCustomer, {
+            saleId: sale.id,
+            movementType: 'EARN',
+            points: pointsEarned,
+            reason: `Sale #${sale.id} eligible paid value`,
+            idempotencyKey: `${data.idempotencyKey || `sale-${sale.id}`}:earn`,
+            user: data.user,
+            metadata: { eligiblePaidCents, priorResidual, newResidual },
+          });
+        }
         await tx.customer.update({
           where: { id: customer.id },
-          data: {
-            loyaltyPoints: payingWithPoints
-              ? { decrement: pointsRedeemed }
-              : { increment: pointsEarned },
-          },
+          data: { loyaltyResidualCents: newResidual },
         });
       }
 
       return {
         success: true,
         saleId: sale.id,
+        pointsEarned,
+        pointsRedeemed,
+        loyaltyResidualCents: newResidual,
         marginGiven:
           totalRevenue > 0
             ? (((totalRevenue - totalCogs) / totalRevenue) * 100).toFixed(1)
             : 0,
         sale,
       };
+    });
+  }
+
+  async cancelSale(id: number, user?: any) {
+    return this.prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({ where: { id }, include: { customer: true } });
+      if (!sale) throw new NotFoundException('Sale not found.');
+      if (sale.status === 'CANCELLED' || sale.loyaltyReversedAt) {
+        return { success: true, sale, idempotent: true };
+      }
+
+      if (sale.customer) {
+        let customer = sale.customer;
+        if (sale.pointsEarned > 0) {
+          const updated = await tx.customer.updateMany({
+            where: { id: customer.id, loyaltyPoints: { gte: sale.pointsEarned } },
+            data: { loyaltyPoints: { decrement: sale.pointsEarned } },
+          });
+          if (updated.count !== 1) {
+            throw new BadRequestException('Cannot reverse earned points without making the balance negative.');
+          }
+          const after = await tx.customer.findUnique({ where: { id: customer.id } });
+          if (!after) throw new BadRequestException('Customer not found after reversal.');
+          await tx.loyaltyPointMovement.create({
+            data: {
+              customerId: customer.id,
+              saleId: sale.id,
+              movementType: 'REVERSAL',
+              points: -sale.pointsEarned,
+              balanceBefore: customer.loyaltyPoints || 0,
+              balanceAfter: after.loyaltyPoints || 0,
+              reason: `Cancellation of sale #${sale.id}`,
+              userId: user?.id || null,
+              userName: user?.fullName || user?.email || null,
+              idempotencyKey: `sale-${sale.id}:cancel-earned`,
+            },
+          });
+          customer = after;
+        }
+        if (sale.pointsRedeemed > 0) {
+          await this.addMovement(tx, customer, {
+            saleId: sale.id,
+            movementType: 'REFUND',
+            points: sale.pointsRedeemed,
+            reason: `Refund points from cancelled sale #${sale.id}`,
+            idempotencyKey: `sale-${sale.id}:cancel-redeemed`,
+            user,
+          });
+        }
+      }
+
+      const updatedSale = await tx.sale.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          fulfillmentStatus: 'Cancelled',
+          paymentStatus: 'Cancelled',
+          loyaltyReversedAt: new Date(),
+        },
+      });
+
+      return { success: true, sale: updatedSale };
     });
   }
 
@@ -409,6 +662,7 @@ export class SalesService {
       include: {
         warehouse: true,
         commercialPartner: true,
+        payments: true,
         items: { include: { product: true } },
       },
     });

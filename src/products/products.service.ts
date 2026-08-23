@@ -71,6 +71,19 @@ export class ProductsService {
             0,
             Number(data.redemptionPointsCost) || 0,
           ),
+          rewardEligible: data.rewardEligible !== false,
+          allowPointsCash: data.allowPointsCash !== false,
+          rewardMaxQuantity: data.rewardMaxQuantity
+            ? Math.max(0, Number(data.rewardMaxQuantity))
+            : null,
+          rewardPromoStart: data.rewardPromoStart
+            ? new Date(data.rewardPromoStart)
+            : null,
+          rewardPromoEnd: data.rewardPromoEnd ? new Date(data.rewardPromoEnd) : null,
+          rewardActive: data.rewardActive !== false,
+          rewardPromoPoints: data.rewardPromoPoints
+            ? Math.max(0, Number(data.rewardPromoPoints))
+            : null,
           supplierId: data.supplierId ? Number(data.supplierId) : null,
           status: data.status || 'Active',
           stock: Number(data.initialStock) || 0,
@@ -181,6 +194,19 @@ export class ProductsService {
             0,
             Number(data.redemptionPointsCost) || 0,
           ),
+          rewardEligible: data.rewardEligible !== false,
+          allowPointsCash: data.allowPointsCash !== false,
+          rewardMaxQuantity: data.rewardMaxQuantity
+            ? Math.max(0, Number(data.rewardMaxQuantity))
+            : null,
+          rewardPromoStart: data.rewardPromoStart
+            ? new Date(data.rewardPromoStart)
+            : null,
+          rewardPromoEnd: data.rewardPromoEnd ? new Date(data.rewardPromoEnd) : null,
+          rewardActive: data.rewardActive !== false,
+          rewardPromoPoints: data.rewardPromoPoints
+            ? Math.max(0, Number(data.rewardPromoPoints))
+            : null,
           supplierId: data.supplierId ? Number(data.supplierId) : null,
           status: data.status,
         },

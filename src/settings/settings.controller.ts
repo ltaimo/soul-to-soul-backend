@@ -11,9 +11,21 @@ export class SettingsController {
     return this.settingsService.getSettings();
   }
 
+  @Get('loyalty')
+  @Roles('admin', 'manager')
+  async getLoyaltyConfig() {
+    return this.settingsService.getLoyaltyConfig();
+  }
+
   @Roles('admin', 'manager')
   @Put()
   async updateSettings(@Body() data: any) {
     return this.settingsService.updateSettings(data);
+  }
+
+  @Roles('admin', 'manager')
+  @Put('loyalty')
+  async updateLoyaltyConfig(@Body() data: any) {
+    return this.settingsService.updateLoyaltyConfig(data);
   }
 }

@@ -68,6 +68,13 @@ model Product {
   minStock             Int     @default(0)
   loyaltyPointsEarned  Int     @default(0)
   redemptionPointsCost Int     @default(0)
+  rewardEligible       Boolean @default(true)
+  allowPointsCash      Boolean @default(true)
+  rewardMaxQuantity    Int?
+  rewardPromoStart     DateTime?
+  rewardPromoEnd       DateTime?
+  rewardActive         Boolean @default(true)
+  rewardPromoPoints    Int?
 
   supplierId Int?
   supplier   Supplier? @relation(fields: [supplierId], references: [id])
@@ -228,12 +235,18 @@ model Customer {
   loyaltyTier     String   @default("Standard")
   discountPercent Float    @default(0)
   loyaltyPoints   Int      @default(0)
+  loyaltyResidualCents Int   @default(0)
+  loyaltyPointsEarnedTotal Int @default(0)
+  loyaltyPointsRedeemedTotal Int @default(0)
+  loyaltyPointsExpiredTotal Int @default(0)
+  loyaltyPointsAdjustedTotal Int @default(0)
   notes           String?
   status          String   @default("Active")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   sales Sale[]
+  loyaltyMovements LoyaltyPointMovement[]
 
   @@index([email])
   @@index([phone])
@@ -295,7 +308,18 @@ model Sale {
   paymentProviderData String?
   notificationStatus  String   @default("Not Required")
   amountPaid          Float    @default(0)
+  amountPaidCents     Int      @default(0)
   changeGiven         Float    @default(0)
+  changeGivenCents    Int      @default(0)
+  discountCents       Int      @default(0)
+  deliveryFeeCents    Int      @default(0)
+  grossTotalCents     Int      @default(0)
+  netTotalCents       Int      @default(0)
+  eligiblePaidCents   Int      @default(0)
+  pointsValueCents    Int      @default(0)
+  idempotencyKey      String?  @unique
+  loyaltyReversedAt   DateTime?
+  status              String   @default("PAID")
   pointsEarned        Int      @default(0)
   pointsRedeemed      Int      @default(0)
   date                DateTime @default(now())
@@ -303,6 +327,8 @@ model Sale {
   totalCogs           Float
 
   items             SaleItem[]
+  payments          SalePayment[]
+  loyaltyMovements  LoyaltyPointMovement[]
   customer          Customer?          @relation(fields: [customerId], references: [id])
   warehouse         Warehouse?         @relation(fields: [warehouseId], references: [id])
   commercialPartner CommercialPartner? @relation(fields: [commercialPartnerId], references: [id])
@@ -310,7 +336,10 @@ model Sale {
   @@index([channel])
   @@index([fulfillmentStatus])
   @@index([paymentStatus])
+  @@index([status])
   @@index([orderReference])
+  @@index([date])
+  @@index([sellerId])
 }
 
 model SaleItem {
@@ -322,9 +351,106 @@ model SaleItem {
   unitCogs             Float // Locked COGS at time of sale
   loyaltyPointsEarned  Int   @default(0)
   redemptionPointsCost Int   @default(0)
+  grossLineCents       Int   @default(0)
+  discountCents        Int   @default(0)
+  netLineCents         Int   @default(0)
+  pointsRedeemed       Int   @default(0)
+  pointsValueCents     Int   @default(0)
+  eligiblePaidCents    Int   @default(0)
 
   sale    Sale    @relation(fields: [saleId], references: [id])
   product Product @relation(fields: [productId], references: [id])
+}
+
+model SalePayment {
+  id               Int      @id @default(autoincrement())
+  saleId           Int
+  method           String
+  amountCents      Int
+  reference        String?
+  providerData     String?
+  status           String   @default("PAID")
+  idempotencyKey   String?
+  createdAt        DateTime @default(now())
+
+  sale Sale @relation(fields: [saleId], references: [id])
+
+  @@unique([idempotencyKey])
+  @@index([saleId])
+  @@index([method])
+  @@index([status])
+}
+
+model LoyaltyPointMovement {
+  id             Int      @id @default(autoincrement())
+  customerId     Int
+  saleId         Int?
+  movementType   String
+  points         Int
+  balanceBefore  Int
+  balanceAfter   Int
+  reason         String
+  userId         Int?
+  userName       String?
+  idempotencyKey String   @unique
+  metadata       String?
+  createdAt      DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  sale     Sale?    @relation(fields: [saleId], references: [id])
+
+  @@index([customerId])
+  @@index([saleId])
+  @@index([movementType])
+  @@index([createdAt])
+}
+
+model LoyaltyProgramConfig {
+  id               Int      @id @default(1)
+  earnRateCents    Int      @default(20000)
+  redeemRateCents  Int      @default(1000)
+  allowPointsCash  Boolean  @default(true)
+  pointsExpireDays Int?
+  roundingMode     String   @default("FLOOR")
+  weekStartsOn     String   @default("MONDAY")
+  updatedAt        DateTime @updatedAt
+}
+
+model SellerGoal {
+  id          Int      @id @default(autoincrement())
+  sellerId    Int
+  sellerName  String?
+  period      String   @default("MONTHLY")
+  targetCents Int
+  startsAt    DateTime
+  endsAt      DateTime
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sellerId])
+  @@index([period])
+  @@index([status])
+  @@index([startsAt, endsAt])
+}
+
+model BonusRule {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  period             String   @default("MONTHLY")
+  eligiblePosition   Int?
+  minimumTargetCents Int?
+  bonusValueCents    Int
+  bonusType          String   @default("FIXED")
+  criteriaJson       String?
+  startsAt           DateTime?
+  endsAt             DateTime?
+  status             String   @default("Active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([period])
+  @@index([status])
 }
 
 model SystemSetting {
