@@ -221,6 +221,8 @@ export class SalesService {
     notificationStatus?: string;
     amountPaid?: number;
     deliveryFee?: number;
+    directDiscount?: number;
+    directDiscountReason?: string;
     payments?: { method: string; amount: number; reference?: string }[];
     pointsToRedeem?: number;
     sellerId?: number;
@@ -259,6 +261,11 @@ export class SalesService {
       let totalCogs = 0;
       let customer: any = null;
       let commercialPartner: any = null;
+      const directDiscountCents = toCents(data.directDiscount);
+      const directDiscountReason = data.directDiscountReason?.trim() || null;
+      if (directDiscountCents > 0 && !directDiscountReason) {
+        throw new BadRequestException('Direct discount requires an internal justification.');
+      }
 
       if (data.commercialPartnerId) {
         commercialPartner = await tx.commercialPartner.findUnique({
@@ -414,6 +421,9 @@ export class SalesService {
         });
       }
 
+      const directDiscountAppliedCents = Math.min(directDiscountCents, netTotalCents);
+      netTotalCents = Math.max(0, netTotalCents - directDiscountAppliedCents);
+
       const requestedPoints = Math.max(0, Number(data.pointsToRedeem) || 0);
       const paymentMethod = data.paymentMethod || (requestedPoints > 0 ? 'Mixed' : 'Cash');
       const wantsPoints = Boolean(data.redeemPoints || requestedPoints > 0 || paymentMethod === 'Points');
@@ -541,6 +551,8 @@ export class SalesService {
           changeGiven: fromCents(changeGivenCents),
           changeGivenCents,
           discountCents: grossTotalCents - netTotalCents,
+          directDiscountCents: directDiscountAppliedCents,
+          directDiscountReason: directDiscountAppliedCents > 0 ? directDiscountReason : null,
           deliveryFeeCents,
           grossTotalCents,
           netTotalCents,

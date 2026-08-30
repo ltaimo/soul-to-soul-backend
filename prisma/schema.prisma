@@ -312,6 +312,8 @@ model Sale {
   changeGiven         Float    @default(0)
   changeGivenCents    Int      @default(0)
   discountCents       Int      @default(0)
+  directDiscountCents Int      @default(0)
+  directDiscountReason String?
   deliveryFeeCents    Int      @default(0)
   grossTotalCents     Int      @default(0)
   netTotalCents       Int      @default(0)
